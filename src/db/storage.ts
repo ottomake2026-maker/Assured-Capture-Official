@@ -1037,26 +1037,15 @@ export async function getPhotosForReport(reportId: string): Promise<Photo[]> {
 
     issueReq.onsuccess = () => {
       const reportIssues: Issue[] = issueReq.result || [];
-      const issueIdSet = new Set(reportIssues.map((i) => i.id));
-
       const photoIndex = photoStore.index('reportId');
-      const photoReq = photoIndex.getAll(reportId);
+      const directPhotoReq = photoIndex.getAll(reportId);
 
-      photoReq.onsuccess = () => {
-        const directPhotos: Photo[] = photoReq.result || [];
-        const allPhotosReq = photoStore.getAll();
+      directPhotoReq.onsuccess = () => {
+        const directPhotos: Photo[] = directPhotoReq.result || [];
+        const photoMap = new Map<string, Photo>();
+        directPhotos.forEach((p) => photoMap.set(p.id, p));
 
-        allPhotosReq.onsuccess = () => {
-          const allPhotos: Photo[] = allPhotosReq.result || [];
-          const photoMap = new Map<string, Photo>();
-
-          directPhotos.forEach((p) => photoMap.set(p.id, p));
-          allPhotos.forEach((p) => {
-            if (p.reportId === reportId || (p.issueId && issueIdSet.has(p.issueId))) {
-              photoMap.set(p.id, p);
-            }
-          });
-
+        if (reportIssues.length === 0) {
           const photos = Array.from(photoMap.values());
           photos.sort((a, b) => {
             if (a.issueNumber !== b.issueNumber) {
@@ -1065,10 +1054,46 @@ export async function getPhotosForReport(reportId: string): Promise<Photo[]> {
             return comparePhotos(a, b);
           });
           resolve(photos);
-        };
-        allPhotosReq.onerror = () => reject(allPhotosReq.error);
+          return;
+        }
+
+        let completed = 0;
+        const issuePhotoStore = tx.objectStore('photos');
+        const issuePhotoIndex = issuePhotoStore.index('issueId');
+
+        reportIssues.forEach((issue) => {
+          const issuePhotosReq = issuePhotoIndex.getAll(issue.id);
+          issuePhotosReq.onsuccess = () => {
+            const ipList = issuePhotosReq.result || [];
+            ipList.forEach((p) => photoMap.set(p.id, p));
+            completed++;
+            if (completed === reportIssues.length) {
+              const photos = Array.from(photoMap.values());
+              photos.sort((a, b) => {
+                if (a.issueNumber !== b.issueNumber) {
+                  return a.issueNumber - b.issueNumber;
+                }
+                return comparePhotos(a, b);
+              });
+              resolve(photos);
+            }
+          };
+          issuePhotosReq.onerror = () => {
+            completed++;
+            if (completed === reportIssues.length) {
+              const photos = Array.from(photoMap.values());
+              photos.sort((a, b) => {
+                if (a.issueNumber !== b.issueNumber) {
+                  return a.issueNumber - b.issueNumber;
+                }
+                return comparePhotos(a, b);
+              });
+              resolve(photos);
+            }
+          };
+        });
       };
-      photoReq.onerror = () => reject(photoReq.error);
+      directPhotoReq.onerror = () => reject(directPhotoReq.error);
     };
     issueReq.onerror = () => reject(issueReq.error);
   });
