@@ -1,0 +1,242 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile and account settings",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID"
+        },
+        "name": {
+          "type": "string",
+          "description": "Display name of inspector"
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address"
+        },
+        "avatarUrl": {
+          "type": "string",
+          "description": "Avatar image URL or photo reference"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of profile creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        }
+      },
+      "required": ["userId", "name", "email", "createdAt", "updatedAt"]
+    },
+    "Report": {
+      "title": "Report",
+      "description": "Inspection report document owned by an authenticated user",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of report owner"
+        },
+        "jobReference": {
+          "type": "string",
+          "description": "Job reference code"
+        },
+        "reportName": {
+          "type": "string",
+          "description": "Title or name of the report"
+        },
+        "clientName": {
+          "type": "string",
+          "description": "Client name"
+        },
+        "address": {
+          "type": "string",
+          "description": "Property inspection address"
+        },
+        "reportDate": {
+          "type": "string",
+          "description": "Report creation date YYYY-MM-DD"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Draft", "In Progress", "Awaiting Review", "Completed", "Sent to Client"],
+          "description": "Current lifecycle status"
+        },
+        "inspectionDate": {
+          "type": "string",
+          "description": "Current inspection date YYYY-MM-DD"
+        },
+        "highestIssueNumberAssigned": {
+          "type": "number",
+          "description": "Monotonically increasing sequence tracker for issue numbering"
+        },
+        "reportImage": {
+          "type": "string",
+          "description": "Cover photo URL"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last modification"
+        },
+        "isDeleted": {
+          "type": "boolean",
+          "description": "Tombstone flag indicating report has been deleted by owner"
+        },
+        "deletedAt": {
+          "type": "string",
+          "description": "ISO timestamp of deletion"
+        }
+      },
+      "required": ["userId", "jobReference", "status", "createdAt", "updatedAt"]
+    },
+    "Issue": {
+      "title": "Issue",
+      "description": "Inspection issue or defect item under a report",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner"
+        },
+        "reportId": {
+          "type": "string",
+          "description": "Parent report ID"
+        },
+        "issueNumber": {
+          "type": "number",
+          "description": "Permanent sequential issue number"
+        },
+        "issueName": {
+          "type": "string",
+          "description": "Short headline or title of defect"
+        },
+        "issueDescription": {
+          "type": "string",
+          "description": "Detailed description of defect"
+        },
+        "category": {
+          "type": "string",
+          "description": "Defect classification category"
+        },
+        "notes": {
+          "type": "string",
+          "description": "Internal notes or observations"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last modification"
+        }
+      },
+      "required": ["userId", "reportId", "issueNumber", "issueName", "createdAt", "updatedAt"]
+    },
+    "Photo": {
+      "title": "Photo",
+      "description": "Evidence photo with annotations and metadata attached to an issue",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the owner"
+        },
+        "reportId": {
+          "type": "string",
+          "description": "Parent report ID"
+        },
+        "issueId": {
+          "type": "string",
+          "description": "Associated issue ID"
+        },
+        "imageFile": {
+          "type": "string",
+          "description": "Image data URL or persistent storage URL"
+        },
+        "storageUri": {
+          "type": "string",
+          "description": "Firebase/Cloud Storage URI"
+        },
+        "description": {
+          "type": "string",
+          "description": "Observation note or caption"
+        },
+        "isReferenceImage": {
+          "type": "boolean",
+          "description": "Whether image is marked as reference"
+        },
+        "issueNumber": {
+          "type": "number",
+          "description": "Cached issue number for fast display"
+        },
+        "jobReference": {
+          "type": "string",
+          "description": "Cached job reference"
+        },
+        "sequenceNumber": {
+          "type": "number",
+          "description": "1-based order within the issue evidence sequence"
+        },
+        "internalNotes": {
+          "type": "string",
+          "description": "Internal surveyor field notes for photo item"
+        },
+        "includeInReport": {
+          "type": "boolean",
+          "description": "Whether to include photo in generated photo report"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of update"
+        }
+      },
+      "required": ["userId", "reportId", "issueId", "imageFile", "createdAt", "updatedAt"]
+    },
+    "TestConnection": {
+      "title": "TestConnection",
+      "description": "Transient healthcheck document used to verify Firestore connectivity on app boot",
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "description": "Connection status ping"
+        }
+      }
+    }
+  },
+  "firestore": {
+    "/test/{docId}": {
+      "schema": "TestConnection",
+      "description": "Healthcheck endpoint for testing client connection"
+    },
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "User profile document isolated to the authenticated user"
+    },
+    "/reports/{reportId}": {
+      "schema": "Report",
+      "description": "Top-level inspection reports collection filtered by owner userId"
+    },
+    "/reports/{reportId}/issues/{issueId}": {
+      "schema": "Issue",
+      "description": "Subcollection of issues belonging to a report, protected by parent report ownership"
+    },
+    "/reports/{reportId}/photos/{photoId}": {
+      "schema": "Photo",
+      "description": "Subcollection of evidence photos belonging to a report, protected by parent report ownership"
+    }
+  }
+}

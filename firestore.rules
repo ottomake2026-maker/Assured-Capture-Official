@@ -1,0 +1,56 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isReportOwner(reportId) {
+      return isAuthenticated() && exists(/databases/$(database)/documents/reports/$(reportId)) && get(/databases/$(database)/documents/reports/$(reportId)).data.userId == request.auth.uid;
+    }
+
+    // Default safety catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // User Profile
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
+    }
+
+    // Health check ping for client connection verification
+    match /test/{docId} {
+      allow read: if true;
+    }
+
+    // Inspection Reports
+    match /reports/{reportId} {
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && resource.data.userId == request.auth.uid;
+
+      // Subcollection: Issues
+      match /issues/{issueId} {
+        allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isReportOwner(reportId));
+        allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid && (!exists(/databases/$(database)/documents/reports/$(reportId)) || isReportOwner(reportId));
+        allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isReportOwner(reportId)) && request.resource.data.userId == request.auth.uid;
+        allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isReportOwner(reportId));
+      }
+
+      // Subcollection: Evidence Photos
+      match /photos/{photoId} {
+        allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isReportOwner(reportId));
+        allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid && (!exists(/databases/$(database)/documents/reports/$(reportId)) || isReportOwner(reportId));
+        allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isReportOwner(reportId)) && request.resource.data.userId == request.auth.uid;
+        allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isReportOwner(reportId));
+      }
+    }
+  }
+}

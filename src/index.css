@@ -1,0 +1,37 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: 'Eurostile Extended';
+  font-style: normal;
+  font-weight: 700 900;
+  src: url('/EurostileExtendedBlack.woff') format('woff');
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --font-brand: 'Eurostile Extended', 'Unbounded', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Assured Architectural Brand Tokens */
+  --color-brand-cyan: #B2E5F6;
+  --color-brand-electric: #628EF7;
+  --color-brand-electric-hover: #4E7AF2;
+  --color-brand-electric-active: #3E69E0;
+  --color-brand-moss: #8CBFAE;
+  --color-brand-brick: #F4B9AD;
+  --color-brand-stone: #C6CDC6;
+  --color-brand-ink: #0E1E2B;
+  --color-brand-soft-gray: #C6CBD1;
+  --color-brand-bg: #F4F6F8;
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans, 'Plus Jakarta Sans', system-ui, sans-serif);
+    background-color: #F4F6F8;
+    color: #0E1E2B;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}

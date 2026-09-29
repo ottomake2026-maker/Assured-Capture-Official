@@ -1,0 +1,6 @@
+{
+  "name": "Assured Capture",
+  "description": "A minimalist professional field inspection app for capturing photo reports with voice transcription and inspection tracking.",
+  "requestFramePermissions": ["camera", "microphone", "geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
