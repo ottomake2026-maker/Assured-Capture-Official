@@ -558,8 +558,12 @@ export async function syncLocalDataToFirestore(
             const photoStore = tx.objectStore('photos');
 
             for (const rep of reportsToPut) {
-              reportStore.put(rep);
-              setSyncedHash(`report_${rep.id}`, computeEntityHash(rep, 'report'));
+              const safeRep = {
+                ...rep,
+                reportType: rep.reportType || 'photo_report',
+              };
+              reportStore.put(safeRep);
+              setSyncedHash(`report_${safeRep.id}`, computeEntityHash(safeRep, 'report'));
             }
             for (const iss of issuesToPut) {
               issueStore.put(iss);

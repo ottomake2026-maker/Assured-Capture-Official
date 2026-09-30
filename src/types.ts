@@ -5,6 +5,28 @@ export type ReportStatus =
   | 'Completed'
   | 'Sent to Client';
 
+export type ReportType =
+  | 'photo_report'
+  | 'draft_photo_report'
+  | 'report'
+  | 'draft_report'
+  | 'expert_report';
+
+export interface ReportTypeOption {
+  value: ReportType;
+  label: string;
+  available: boolean;
+  comingSoonText?: string;
+}
+
+export const REPORT_TYPE_OPTIONS: ReportTypeOption[] = [
+  { value: 'photo_report', label: 'Photo Report', available: true },
+  { value: 'draft_photo_report', label: 'Draft Photo Report', available: false, comingSoonText: 'Coming soon' },
+  { value: 'report', label: 'Report', available: false, comingSoonText: 'Coming soon' },
+  { value: 'draft_report', label: 'Draft Report', available: false, comingSoonText: 'Coming soon' },
+  { value: 'expert_report', label: 'Expert Report', available: false, comingSoonText: 'Coming soon' },
+];
+
 export interface InspectionDateHistoryRecord {
   date: string;
   changedAt: string;
@@ -15,6 +37,7 @@ export interface Report {
   userId?: string;
   jobReference: string;
   reportName: string;
+  reportType?: ReportType;
   clientName: string;
   address: string;
   reportDate: string; // YYYY-MM-DD
@@ -49,6 +72,9 @@ export interface TextBoxAnnotation {
   y: number; // percentage 0 - 100 relative to image height
   color: string; // hex color e.g. '#EF4444', '#FACC15', '#628EF7'
   fontSize?: number;
+  scale?: number; // relative scaling multiplier (default 1.0, e.g. 0.5 to 3.5)
+  width?: number;
+  height?: number;
 }
 
 export interface Photo {

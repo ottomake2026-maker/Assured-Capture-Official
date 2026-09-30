@@ -27,11 +27,28 @@
 }
 
 @layer base {
+  html {
+    /* Support iOS dynamic safe areas */
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
   body {
     font-family: var(--font-sans, 'Plus Jakarta Sans', system-ui, sans-serif);
     background-color: #F4F6F8;
     color: #0E1E2B;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Prevent iOS Safari from auto-zooming the viewport when focusing form inputs */
+  @media screen and (max-width: 768px) {
+    input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
   }
 }

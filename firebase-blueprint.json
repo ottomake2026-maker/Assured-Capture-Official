@@ -205,6 +205,48 @@
       },
       "required": ["userId", "reportId", "issueId", "imageFile", "createdAt", "updatedAt"]
     },
+    "AuthorizedUser": {
+      "title": "AuthorizedUser",
+      "description": "Authorized user record with RBAC role and status managed by Administrators",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Record ID"
+        },
+        "userId": {
+          "type": "string",
+          "description": "Associated Firebase Auth UID if signed in"
+        },
+        "name": {
+          "type": "string",
+          "description": "Full name of the authorized user"
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "user"],
+          "description": "Access control role"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Active", "Pending", "Disabled"],
+          "description": "Account authorization status"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of creation"
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of last update"
+        }
+      },
+      "required": ["id", "name", "email", "role", "status", "createdAt", "updatedAt"]
+    },
     "TestConnection": {
       "title": "TestConnection",
       "description": "Transient healthcheck document used to verify Firestore connectivity on app boot",
@@ -225,6 +267,10 @@
     "/users/{userId}": {
       "schema": "UserProfile",
       "description": "User profile document isolated to the authenticated user"
+    },
+    "/authorized_users/{userId}": {
+      "schema": "AuthorizedUser",
+      "description": "Authorized users directory for role-based access control managed by Administrators"
     },
     "/reports/{reportId}": {
       "schema": "Report",

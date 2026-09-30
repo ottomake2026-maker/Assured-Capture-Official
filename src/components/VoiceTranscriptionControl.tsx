@@ -18,24 +18,64 @@ export const VoiceTranscriptionControl: React.FC<VoiceTranscriptionControlProps>
   const recognitionRef = useRef<any>(null);
   const isSupportedRef = useRef<boolean>(true);
 
+  const interimTextRef = useRef<string>('');
+  const watchdogTimerRef = useRef<any>(null);
+
+  const clearWatchdog = () => {
+    if (watchdogTimerRef.current) {
+      clearTimeout(watchdogTimerRef.current);
+      watchdogTimerRef.current = null;
+    }
+  };
+
   useEffect(() => {
     // Check Web Speech API support
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
+    const isIOS =
+      /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isStandalone =
+      (window.navigator as any).standalone === true ||
+      window.matchMedia('(display-mode: standalone)').matches;
+
     if (!SpeechRecognition) {
       isSupportedRef.current = false;
       setVoiceState('unavailable');
-      setErrorMessage(
-        'Speech recognition is not supported by this browser engine. Chrome, Edge, or Safari iOS 14.5+ are recommended for field voice transcription.'
-      );
+      if (isIOS && isStandalone) {
+        setErrorMessage(
+          'Voice input is restricted in iOS Home Screen app mode. You can continue typing directly, or open Assured Capture in Safari for voice input.'
+        );
+      } else {
+        setErrorMessage(
+          'Speech recognition is not supported in this browser. You can continue typing your observation directly.'
+        );
+      }
     }
 
+    // Safely abort voice recognition on tab switch or screen lock
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden' && recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (_) {}
+        recognitionRef.current = null;
+        clearWatchdog();
+        setVoiceState('ready');
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearWatchdog();
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
         } catch (_) {}
+        recognitionRef.current = null;
       }
     };
   }, []);
@@ -47,21 +87,26 @@ export const VoiceTranscriptionControl: React.FC<VoiceTranscriptionControlProps>
     if (!SpeechRecognition) {
       setVoiceState('unavailable');
       setErrorMessage(
-        'Speech recognition is not supported in this browser. Please use Chrome, Edge, or Safari.'
+        'Speech recognition is not supported in this browser. You can continue typing your observation.'
       );
       return;
     }
 
     setErrorMessage(null);
     setInterimText('');
+    interimTextRef.current = '';
+    clearWatchdog();
 
     try {
+      // Abort and clean up any existing session before creating a fresh one
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
         } catch (_) {}
+        recognitionRef.current = null;
       }
 
+      // Create a fresh SpeechRecognition instance for each user tap (essential for iOS Safari)
       const recognition = new SpeechRecognition();
       recognitionRef.current = recognition;
 
@@ -69,6 +114,18 @@ export const VoiceTranscriptionControl: React.FC<VoiceTranscriptionControlProps>
       recognition.interimResults = true;
       recognition.lang = navigator.language || 'en-US';
       recognition.maxAlternatives = 1;
+
+      let finalReceived = false;
+
+      // Watchdog timeout to prevent voice state from hanging indefinitely on iOS Safari
+      watchdogTimerRef.current = setTimeout(() => {
+        if (recognitionRef.current) {
+          try {
+            recognitionRef.current.stop();
+          } catch (_) {}
+        }
+        setVoiceState(prev => (prev === 'listening' || prev === 'processing' ? 'ready' : prev));
+      }, 25000);
 
       recognition.onstart = () => {
         setVoiceState('listening');
@@ -89,11 +146,15 @@ export const VoiceTranscriptionControl: React.FC<VoiceTranscriptionControlProps>
 
         if (interimTrans) {
           setInterimText(interimTrans);
+          interimTextRef.current = interimTrans;
         }
 
         if (finalTrans) {
+          finalReceived = true;
+          clearWatchdog();
           setVoiceState('processing');
           setInterimText('');
+          interimTextRef.current = '';
           onTranscriptReceived(finalTrans.trim());
         }
       };
@@ -104,30 +165,54 @@ export const VoiceTranscriptionControl: React.FC<VoiceTranscriptionControlProps>
 
       recognition.onerror = (event: any) => {
         console.warn('Speech recognition error event:', event.error);
-        if (event.error === 'no-speech') {
+        clearWatchdog();
+        const errType = event.error;
+
+        if (errType === 'no-speech') {
           setErrorMessage('No speech detected. Please tap and speak clearly into the microphone.');
           setVoiceState('error');
-        } else if (event.error === 'not-allowed') {
-          setErrorMessage('Microphone access was denied. Please allow microphone permissions in your browser.');
+        } else if (errType === 'not-allowed' || errType === 'service-not-allowed') {
+          setErrorMessage('Microphone access was denied. Please allow microphone permissions in Safari / browser settings.');
           setVoiceState('error');
-        } else if (event.error === 'network') {
+        } else if (errType === 'audio-capture') {
+          setErrorMessage('Microphone is unavailable or in use by another app.');
+          setVoiceState('error');
+        } else if (errType === 'network') {
           setErrorMessage('Network connection error during voice transcription service.');
           setVoiceState('error');
+        } else if (errType === 'aborted') {
+          // If aborted after capturing partial text, deliver partial text
+          if (interimTextRef.current && !finalReceived) {
+            onTranscriptReceived(interimTextRef.current.trim());
+            interimTextRef.current = '';
+            setInterimText('');
+          }
+          // If session aborted naturally without explicit error, quietly return to ready
+          setVoiceState('ready');
         } else {
-          setErrorMessage(`Speech recognition error: ${event.error || 'Unknown'}`);
+          setErrorMessage('Voice input was interrupted. You can tap to try again or continue typing.');
           setVoiceState('error');
         }
       };
 
       recognition.onend = () => {
-        // Return to ready unless in error or unavailable
+        clearWatchdog();
+        // If recognition ended with uncommitted interim text, preserve and deliver it
+        if (interimTextRef.current && !finalReceived) {
+          onTranscriptReceived(interimTextRef.current.trim());
+          interimTextRef.current = '';
+          setInterimText('');
+        }
+        recognitionRef.current = null;
         setVoiceState(prev => (prev === 'error' || prev === 'unavailable' ? prev : 'ready'));
       };
 
+      // Must be invoked synchronously directly within user gesture
       recognition.start();
     } catch (err: any) {
-      console.error('Failed to start speech recognition:', err);
-      setErrorMessage(err.message || 'Unable to start speech recognition engine.');
+      clearWatchdog();
+      console.error('Failed to start speech recognition synchronously:', err);
+      setErrorMessage('Unable to start voice recognition in this browser. You can continue typing directly.');
       setVoiceState('error');
     }
   };

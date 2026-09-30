@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Report,
+  ReportStatus,
   Issue,
   Photo,
   ActiveScreen,
@@ -35,7 +36,7 @@ import {
 import { subscribeToPendingSyncCount, scheduleSyncQueueProcessing } from './db/syncQueue';
 import { useOnlineStatus } from './utils/useOnlineStatus';
 import { OfflineIndicator } from './components/OfflineIndicator';
-import { initAuth, logout, auth } from './utils/firebaseAuth';
+import { initAuth, logout, auth, checkUserAuthorized } from './utils/firebaseAuth';
 import { syncLocalDataToFirestore } from './utils/firestoreSync';
 import { User } from 'firebase/auth';
 import { AuthScreen } from './components/AuthScreen';
@@ -86,6 +87,8 @@ export default function App() {
   const [isNewReportWorkflow, setIsNewReportWorkflow] = useState(false);
   const [isQuotaExhausted, setIsQuotaExhausted] = useState(false);
   const [isQuotaNoticeDismissed, setIsQuotaNoticeDismissed] = useState(false);
+  const [homeSearchTerm, setHomeSearchTerm] = useState<string>('');
+  const [homeStatusFilter, setHomeStatusFilter] = useState<ReportStatus | 'ALL'>('ALL');
 
   // Subscribe to quota status changes
   useEffect(() => {
@@ -160,11 +163,22 @@ export default function App() {
   // Initialize Auth state listener
   useEffect(() => {
     const unsubscribe = initAuth(async (user) => {
-      setCurrentUser(user);
-      setAuthLoading(false);
-
       if (user) {
+        // Verify user authorization against authorized accounts / records
+        const isAuth = await checkUserAuthorized(user);
+        if (!isAuth) {
+          console.warn('Unauthorized user session detected. Signing out.');
+          await logout();
+          setCurrentUser(null);
+          setIsGuestMode(false);
+          setAuthLoading(false);
+          setIsLoading(false);
+          return;
+        }
+
+        setCurrentUser(user);
         setIsGuestMode(false);
+        setAuthLoading(false);
         setIsLoading(true);
         setSyncStatus({ text: 'Loading your reports…', type: 'loading' });
 
@@ -228,20 +242,9 @@ export default function App() {
           setIsLoading(false);
         }
       } else {
-        // Logged out: reset active workspace state unless currently in guest mode
-        setIsGuestMode(false);
-        clearStoredUserProfile();
-        setUserProfile(createEmptyGuestProfile());
-        setReports([]);
-        setActiveReport(null);
-        setActiveReportId(null);
-        setActiveReportIssues([]);
-        setActiveIssue(null);
-        setActiveIssueId(null);
-        setActiveIssuePhotos([]);
-        setActivePhoto(null);
-        setActivePhotoId(null);
-        setActiveScreen('reports_home');
+        // No authenticated cloud session
+        setCurrentUser(null);
+        setAuthLoading(false);
         setIsLoading(false);
       }
     });
@@ -260,6 +263,21 @@ export default function App() {
         .catch((err) => console.warn('Reconnect sync notice:', err));
     }
   }, [wasOffline, isOnline, currentUser, refreshReports]);
+
+  // Handle Safari lifecycle events & BFCache restoration safely
+  useEffect(() => {
+    const handlePageShow = (e: PageTransitionEvent) => {
+      // When restored from Safari BFCache or app-switching, resume sync processing quietly without disrupting user draft
+      if (e.persisted && currentUser?.uid) {
+        scheduleSyncQueueProcessing(300);
+      }
+    };
+
+    window.addEventListener('pageshow', handlePageShow);
+    return () => {
+      window.removeEventListener('pageshow', handlePageShow);
+    };
+  }, [currentUser]);
 
   // Handle Trigger Manual Cloud Sync
   const handleTriggerManualSync = async () => {
@@ -288,7 +306,7 @@ export default function App() {
     }
   };
 
-  // Handle User Sign Out or Exiting Guest Session
+  // Handle User Sign Out
   const handleSignOut = async () => {
     setIsLoading(true);
     try {
@@ -300,7 +318,6 @@ export default function App() {
       setIsGuestMode(false);
       setCurrentUser(null);
       setUserProfile(createEmptyGuestProfile());
-      setReports([]);
       setActiveReport(null);
       setActiveReportId(null);
       setActiveReportIssues([]);
@@ -317,35 +334,13 @@ export default function App() {
     }
   };
 
-  // Handle continuing without an account (Guest Mode)
-  const handleContinueAsGuest = async () => {
-    setIsGuestMode(true);
-    setIsLoading(true);
-    clearStoredUserProfile();
-    setUserProfile(createEmptyGuestProfile());
-    try {
-      await refreshReports();
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Handle returning to Sign In screen from Guest Mode without clearing local guest data
-  const handleRequestSignIn = () => {
-    setIsGuestMode(false);
-    clearStoredUserProfile();
-    setUserProfile(createEmptyGuestProfile());
-  };
-
-  // Handle Create New Report
-  const handleCreateNewReport = async () => {
+  // Handle Create New Report (holds in-memory draft; will not persist empty report until user enters Job Reference)
+  const handleCreateNewReport = () => {
     try {
       const newReport = createNewReportDraft();
       if (currentUser?.uid) {
         newReport.userId = currentUser.uid;
       }
-      await saveReport(newReport);
-      await refreshReports();
       setActiveReport(newReport);
       setActiveReportId(newReport.id);
       setActiveReportIssues([]);
@@ -413,7 +408,7 @@ export default function App() {
     }
   };
 
-  // Handle Add Issue (sequential permanent numbering per rule: max + 1)
+  // Handle Add Issue (in-memory draft until meaningful content or evidence is added)
   const handleAddIssue = async () => {
     if (!activeReport) return;
     try {
@@ -429,8 +424,6 @@ export default function App() {
         updatedAt: new Date().toISOString(),
       };
 
-      await saveIssue(newIssue);
-      await refreshActiveReportIssues(activeReport.id);
       setActiveIssue(newIssue);
       setActiveIssueId(newIssue.id);
       setActiveIssuePhotos([]);
@@ -677,18 +670,24 @@ export default function App() {
     );
   }
 
-  // 2. Unauthenticated state: display dedicated AuthScreen (unless user chose Guest Mode)
+  // 2. Passwordless Email Link Auth Screen when there is no authenticated session and not in guest mode
   if (!currentUser && !isGuestMode) {
     return (
       <AuthScreen
-        onAuthenticated={() => refreshReports()}
-        onContinueAsGuest={handleContinueAsGuest}
+        onAuthenticated={() => {
+          // Firebase onAuthStateChanged handles session updates & data loads
+        }}
+        onContinueAsGuest={() => {
+          setIsGuestMode(true);
+          setUserProfile(createEmptyGuestProfile());
+          refreshReports();
+        }}
       />
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F4F6F8] text-[#0E1E2B] font-sans antialiased selection:bg-[#B2E5F6] selection:text-[#0E1E2B] pb-16">
+    <div className="min-h-[100dvh] bg-[#F4F6F8] text-[#0E1E2B] font-sans antialiased selection:bg-[#B2E5F6] selection:text-[#0E1E2B] pb-[calc(4rem+env(safe-area-inset-bottom,0px))]">
       {/* Global Error Notice */}
       {globalError && (
         <div className="max-w-3xl lg:max-w-4xl mx-auto px-4 mt-4">
@@ -738,11 +737,14 @@ export default function App() {
             onOpenProfile={() => setActiveScreen('user_profile')}
             isLoading={isLoading}
             isGuest={!currentUser}
-            onSignInRequest={handleRequestSignIn}
             syncStatus={syncStatus}
             isOnline={isOnline}
             pendingSyncCount={pendingSyncCount}
             isSyncing={isManualSyncing}
+            searchTerm={homeSearchTerm}
+            onSearchTermChange={setHomeSearchTerm}
+            statusFilter={homeStatusFilter}
+            onStatusFilterChange={setHomeStatusFilter}
           />
         )}
 
@@ -753,7 +755,6 @@ export default function App() {
             onBack={() => setActiveScreen('reports_home')}
             onSaveProfile={handleSaveUserProfile}
             onSignOut={handleSignOut}
-            onRequestSignIn={handleRequestSignIn}
             isGuest={!currentUser}
             onSyncComplete={refreshReports}
           />

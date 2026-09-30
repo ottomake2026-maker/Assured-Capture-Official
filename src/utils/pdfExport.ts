@@ -274,6 +274,42 @@ export async function buildPhotoReportPdf(
     format: 'letter', // 612 x 792 pt
   });
 
+  // Helper to render prominent semi-transparent diagonal status watermark IN FRONT of page content
+  const rawStatus = (report.status || 'Draft').toString();
+  const statusWatermarkText = rawStatus.replace(/_/g, ' ').toUpperCase();
+
+  const renderStatusWatermark = () => {
+    doc.saveGraphicsState();
+    if (typeof (doc as any).setGState === 'function' && (doc as any).GState) {
+      doc.setGState(new (doc as any).GState({ opacity: 0.13 }));
+    }
+    doc.setFont('helvetica', 'bold');
+
+    // Calculate dynamic font size so watermark spans approximately 68-72% of page width
+    let fontSize = 100;
+    doc.setFontSize(fontSize);
+    const measuredWidth = doc.getTextWidth(statusWatermarkText);
+    const targetWidth = PAGE_WIDTH * 0.70; // ~428 pt (~70% of 612 pt page width)
+
+    if (measuredWidth > 0) {
+      fontSize = Math.min(115, Math.max(48, Math.round(fontSize * (targetWidth / measuredWidth))));
+      doc.setFontSize(fontSize);
+    }
+
+    doc.setTextColor(100, 116, 139); // Clean slate gray/blue tone matching Assured styling
+
+    // Exact geometric center of the page with vertical and horizontal centering
+    const centerX = PAGE_WIDTH / 2;
+    const centerY = PAGE_HEIGHT / 2;
+
+    doc.text(statusWatermarkText, centerX, centerY, {
+      angle: -35,
+      align: 'center',
+      baseline: 'middle',
+    });
+    doc.restoreGraphicsState();
+  };
+
   // Helper to render standardized footer on each page
   const renderFooter = (pageNumber: number, totalPagesCount: number) => {
     // Divider line
@@ -575,10 +611,11 @@ export async function buildPhotoReportPdf(
     }
   }
 
-  // Render footers across all generated pages with exact total page count
+  // Render status watermark in front of report content & footers across all generated pages
   const totalPages = doc.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
+    renderStatusWatermark();
     renderFooter(p, totalPages);
   }
 

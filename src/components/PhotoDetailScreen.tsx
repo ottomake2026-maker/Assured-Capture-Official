@@ -22,47 +22,124 @@ import {
 } from 'lucide-react';
 import { formatCaptureDateTime, extractExifCaptureDate } from '../utils/exifUtils';
 
+function wrapText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxWidth: number
+): string[] {
+  const lines: string[] = [];
+  const rawParagraphs = text.split(/\r?\n/);
+
+  for (const paragraph of rawParagraphs) {
+    if (!paragraph) {
+      lines.push('');
+      continue;
+    }
+    const words = paragraph.split(' ');
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const metrics = ctx.measureText(testLine);
+
+      if (metrics.width > maxWidth && currentLine) {
+        lines.push(currentLine);
+        // If single word itself exceeds maxWidth, break the word into character chunks
+        if (ctx.measureText(word).width > maxWidth) {
+          let subWord = '';
+          for (const char of word) {
+            if (ctx.measureText(subWord + char).width > maxWidth) {
+              if (subWord) lines.push(subWord);
+              subWord = char;
+            } else {
+              subWord += char;
+            }
+          }
+          currentLine = subWord;
+        } else {
+          currentLine = word;
+        }
+      } else if (metrics.width > maxWidth && !currentLine) {
+        let subWord = '';
+        for (const char of word) {
+          if (ctx.measureText(subWord + char).width > maxWidth) {
+            if (subWord) lines.push(subWord);
+            subWord = char;
+          } else {
+            subWord += char;
+          }
+        }
+        currentLine = subWord;
+      } else {
+        currentLine = testLine;
+      }
+    }
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+  }
+
+  return lines.length > 0 ? lines : [''];
+}
+
 function drawTextBoxOnCanvas(
   ctx: CanvasRenderingContext2D,
   box: TextBoxAnnotation,
   canvasWidth: number,
-  canvasHeight: number
+  canvasHeight: number,
+  displayedWidth?: number
 ) {
   if (!box.text || !box.text.trim()) return;
 
   const x = (box.x / 100) * canvasWidth;
   const y = (box.y / 100) * canvasHeight;
 
-  // Scale font size proportionally to image resolution, maintaining strong readability
-  const fontSize = Math.max(16, Math.round(canvasWidth / 50));
-  const paddingX = Math.round(fontSize * 0.6);
-  const paddingY = Math.round(fontSize * 0.4);
-  const borderRadius = Math.round(fontSize * 0.25);
+  const boxScale = box.scale || 1.0;
+  // Convert editor displayed CSS dimensions to actual canvas resolution coordinates
+  const dispW = displayedWidth && displayedWidth > 50 ? displayedWidth : 500;
+  const scaleMultiplier = canvasWidth / dispW;
+
+  // Editor base font is 14px * boxScale; convert to exact canvas pixel font size
+  const editorFontSize = 14 * boxScale;
+  const fontSize = Math.max(8, Math.round(editorFontSize * scaleMultiplier));
+  const paddingX = Math.round(8 * boxScale * scaleMultiplier);
+  const paddingY = Math.round(4 * boxScale * scaleMultiplier);
+  const borderRadius = Math.max(4, Math.round(6 * boxScale * scaleMultiplier));
+  const lineHeight = Math.round(fontSize * 1.35);
 
   ctx.save();
   ctx.font = `bold ${fontSize}px ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace`;
   ctx.textBaseline = 'top';
 
-  const text = box.text.trim();
-  const metrics = ctx.measureText(text);
-  const boxWidth = metrics.width + paddingX * 2;
-  const boxHeight = fontSize + paddingY * 2;
+  const maxTextWidth = Math.max(100 * scaleMultiplier, canvasWidth * 0.92 - paddingX * 2);
+  const lines = wrapText(ctx, box.text.trim(), maxTextWidth);
 
-  // Keep within canvas bounds
-  const clampedX = Math.max(8, Math.min(canvasWidth - boxWidth - 8, x));
-  const clampedY = Math.max(8, Math.min(canvasHeight - boxHeight - 8, y));
+  // Measure widest line to determine exact dynamic box width
+  let maxLineWidth = 0;
+  for (const line of lines) {
+    const w = ctx.measureText(line).width;
+    if (w > maxLineWidth) {
+      maxLineWidth = w;
+    }
+  }
+
+  const boxWidth = maxLineWidth + paddingX * 2;
+  const boxHeight = lines.length * lineHeight + paddingY * 2;
+
+  // Keep within canvas bounds without jumping
+  const clampedX = Math.max(4, Math.min(canvasWidth - boxWidth - 4, x));
+  const clampedY = Math.max(4, Math.min(canvasHeight - boxHeight - 4, y));
 
   const color = box.color || '#EF4444';
 
   // 1. Text Box Outline with COMPLETELY TRANSPARENT background (no filled rectangle)
-  // Subtle dark drop-shadow ensures outline and text are clearly readable against any photo background
-  ctx.shadowColor = 'rgba(0, 0, 0, 0.75)';
-  ctx.shadowBlur = Math.max(2, Math.round(fontSize * 0.2));
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+  ctx.shadowBlur = Math.max(2, Math.round(fontSize * 0.25));
   ctx.shadowOffsetX = 1;
   ctx.shadowOffsetY = 1;
 
   ctx.strokeStyle = color;
-  ctx.lineWidth = Math.max(2, Math.round(canvasWidth / 400));
+  ctx.lineWidth = Math.max(2, Math.round(2 * boxScale * scaleMultiplier));
 
   ctx.beginPath();
   if (ctx.roundRect) {
@@ -73,9 +150,11 @@ function drawTextBoxOnCanvas(
   // No fill - transparent background
   ctx.stroke();
 
-  // 2. Text rendered in the selected markup color
+  // 2. Text rendered line-by-line in the selected markup color
   ctx.fillStyle = color;
-  ctx.fillText(text, clampedX + paddingX, clampedY + paddingY);
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], clampedX + paddingX, clampedY + paddingY + i * lineHeight);
+  }
   ctx.restore();
 }
 
@@ -126,6 +205,17 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
   const [selectedTextBoxId, setSelectedTextBoxId] = useState<string | null>(null);
   const [draggingTextBoxId, setDraggingTextBoxId] = useState<string | null>(null);
   const dragStartPosRef = useRef<{ clientX: number; clientY: number; boxX: number; boxY: number } | null>(null);
+
+  // Text Box manual resizing states
+  const [resizingTextBoxId, setResizingTextBoxId] = useState<string | null>(null);
+  const dragResizeStartRef = useRef<{
+    clientX: number;
+    clientY: number;
+    initialScale: number;
+    originX: number;
+    originY: number;
+    startHypot: number;
+  } | null>(null);
 
   // Original capture timestamp state (EXIF DateTimeOriginal)
   const [capturedAt, setCapturedAt] = useState<string | null | undefined>(photo.capturedAt);
@@ -211,7 +301,7 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
     }
   };
 
-  // Text box pointer down for dragging
+  // Text box pointer down for dragging/moving
   const handleTextBoxPointerDown = (e: React.MouseEvent | React.TouchEvent, boxId: string) => {
     e.stopPropagation();
     setSelectedTextBoxId(boxId);
@@ -258,8 +348,8 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
     const deltaXPercent = ((clientX - dragStartPosRef.current.clientX) / containerRect.width) * 100;
     const deltaYPercent = ((clientY - dragStartPosRef.current.clientY) / containerRect.height) * 100;
 
-    const newX = Math.max(1, Math.min(85, dragStartPosRef.current.boxX + deltaXPercent));
-    const newY = Math.max(1, Math.min(90, dragStartPosRef.current.boxY + deltaYPercent));
+    const newX = Math.max(0.5, Math.min(88, dragStartPosRef.current.boxX + deltaXPercent));
+    const newY = Math.max(0.5, Math.min(92, dragStartPosRef.current.boxY + deltaYPercent));
 
     setTextBoxes(prev =>
       prev.map(b => (b.id === draggingTextBoxId ? { ...b, x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 } : b))
@@ -293,6 +383,95 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
       };
     }
   }, [draggingTextBoxId, handleTextBoxPointerMove, handleTextBoxPointerUp]);
+
+  // Text box pointer down on corner resize handle
+  const handleTextBoxResizePointerDown = (e: React.MouseEvent | React.TouchEvent, boxId: string) => {
+    e.stopPropagation();
+    e.preventDefault();
+    setSelectedTextBoxId(boxId);
+    setResizingTextBoxId(boxId);
+
+    const targetBox = textBoxes.find(b => b.id === boxId);
+    if (!targetBox) return;
+
+    let clientX = 0;
+    let clientY = 0;
+    if ('touches' in e && e.touches && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else if ('clientX' in e) {
+      clientX = (e as React.MouseEvent).clientX;
+      clientY = (e as React.MouseEvent).clientY;
+    }
+
+    const boxElem = document.getElementById(`markup_textbox_${boxId}`);
+    const boxRect = boxElem ? boxElem.getBoundingClientRect() : null;
+    const originX = boxRect ? boxRect.left : clientX - 80;
+    const originY = boxRect ? boxRect.top : clientY - 30;
+
+    const startHypot = Math.max(20, Math.hypot(clientX - originX, clientY - originY));
+
+    dragResizeStartRef.current = {
+      clientX,
+      clientY,
+      initialScale: targetBox.scale || 1.0,
+      originX,
+      originY,
+      startHypot,
+    };
+  };
+
+  // Text box resize dragging move handler
+  const handleTextBoxResizePointerMove = useCallback((e: MouseEvent | TouchEvent) => {
+    if (!resizingTextBoxId || !dragResizeStartRef.current) return;
+
+    let clientX = 0;
+    let clientY = 0;
+    if ('touches' in e && e.touches && e.touches.length > 0) {
+      clientX = e.touches[0].clientX;
+      clientY = e.touches[0].clientY;
+    } else if ('clientX' in e) {
+      clientX = (e as MouseEvent).clientX;
+      clientY = (e as MouseEvent).clientY;
+    }
+
+    const { initialScale, originX, originY, startHypot } = dragResizeStartRef.current;
+    const currentHypot = Math.hypot(clientX - originX, clientY - originY);
+    const ratio = currentHypot / startHypot;
+    const newScale = Math.min(3.5, Math.max(0.5, Math.round(initialScale * ratio * 100) / 100));
+
+    setTextBoxes(prev =>
+      prev.map(b => (b.id === resizingTextBoxId ? { ...b, scale: newScale } : b))
+    );
+  }, [resizingTextBoxId]);
+
+  const handleTextBoxResizePointerUp = useCallback(() => {
+    if (resizingTextBoxId) {
+      setResizingTextBoxId(null);
+      dragResizeStartRef.current = null;
+    }
+  }, [resizingTextBoxId]);
+
+  useEffect(() => {
+    if (resizingTextBoxId) {
+      const onMove = (e: MouseEvent | TouchEvent) => handleTextBoxResizePointerMove(e);
+      const onUp = () => handleTextBoxResizePointerUp();
+
+      window.addEventListener('mousemove', onMove);
+      window.addEventListener('mouseup', onUp);
+      window.addEventListener('touchmove', onMove, { passive: false });
+      window.addEventListener('touchend', onUp);
+      window.addEventListener('touchcancel', onUp);
+
+      return () => {
+        window.removeEventListener('mousemove', onMove);
+        window.removeEventListener('mouseup', onUp);
+        window.removeEventListener('touchmove', onMove);
+        window.removeEventListener('touchend', onUp);
+        window.removeEventListener('touchcancel', onUp);
+      };
+    }
+  }, [resizingTextBoxId, handleTextBoxResizePointerMove, handleTextBoxResizePointerUp]);
 
   const handleUpdateTextBoxText = (id: string, text: string) => {
     setTextBoxes(prev => prev.map(b => (b.id === id ? { ...b, text } : b)));
@@ -399,6 +578,7 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
         x: Math.round(xPercent * 10) / 10,
         y: Math.round(yPercent * 10) / 10,
         color: markupColor,
+        scale: 1.0,
       };
 
       setTextBoxes(prev => [...prev, newBox]);
@@ -531,12 +711,17 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
       mergeCtx.drawImage(canvas, 0, 0, naturalWidth, naturalHeight);
     }
 
-    // 3. Draw text box annotations
+    // 3. Draw text box annotations using exact displayed width to preserve on-screen scale
+    const displayedWidth = imageRef.current?.clientWidth || canvas?.clientWidth || img.clientWidth || 500;
     textBoxes.forEach(box => {
-      drawTextBoxOnCanvas(mergeCtx, box, naturalWidth, naturalHeight);
+      drawTextBoxOnCanvas(mergeCtx, box, naturalWidth, naturalHeight, displayedWidth);
     });
 
-    return mergeCanvas.toDataURL('image/jpeg', 0.92);
+    const result = mergeCanvas.toDataURL('image/jpeg', 0.92);
+    // Explicitly release backing canvas buffer to avoid memory accumulation on iOS WebKit
+    mergeCanvas.width = 0;
+    mergeCanvas.height = 0;
+    return result;
   };
 
   const handleUndo = () => {
@@ -925,53 +1110,81 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
               textBoxes.map(box => {
                 const isSelected = selectedTextBoxId === box.id;
                 const boxColor = box.color || '#EF4444';
+                const scale = box.scale || 1.0;
+                const fontSize = Math.round(14 * scale);
+                const paddingX = Math.round(8 * scale);
+                const paddingY = Math.round(4 * scale);
+                const iconSize = Math.max(12, Math.round(14 * Math.min(1.8, Math.max(0.75, scale))));
 
                 return (
                   <div
                     key={box.id}
+                    id={`markup_textbox_${box.id}`}
                     onClick={e => {
                       e.stopPropagation();
                       setSelectedTextBoxId(box.id);
                     }}
-                    className={`absolute z-20 group rounded-md border-2 transition-all ${
-                      isSelected ? 'ring-2 ring-white ring-offset-1 ring-offset-black/50' : 'hover:opacity-90'
+                    className={`absolute z-20 group rounded-md border-2 transition-shadow inline-flex items-start ${
+                      isSelected ? 'ring-2 ring-white ring-offset-1 ring-offset-black/60 shadow-xl' : 'hover:opacity-95 shadow-md'
                     }`}
                     style={{
                       left: `${box.x}%`,
                       top: `${box.y}%`,
+                      maxWidth: 'min(92%, 600px)',
                       borderColor: boxColor,
                       backgroundColor: 'transparent',
-                      boxShadow: '0 1px 4px rgba(0, 0, 0, 0.65)',
                     }}
                   >
-                    <div className="flex items-center gap-1 px-1.5 py-0.5">
+                    <div
+                      className="flex items-start gap-1 w-full"
+                      style={{ padding: `${paddingY}px ${paddingX}px` }}
+                    >
                       {/* Drag handle to move text box */}
                       <div
                         onMouseDown={e => handleTextBoxPointerDown(e, box.id)}
                         onTouchStart={e => handleTextBoxPointerDown(e, box.id)}
-                        className="touch-none cursor-grab active:cursor-grabbing p-0.5 opacity-80 hover:opacity-100 transition-opacity"
-                        style={{ color: boxColor, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                        className="touch-none cursor-grab active:cursor-grabbing p-0.5 opacity-80 hover:opacity-100 transition-opacity mt-0.5 shrink-0"
+                        style={{ color: boxColor, textShadow: '0 1px 2px rgba(0,0,0,0.9)' }}
                         title="Drag to move text box"
                         aria-label="Drag to move text box"
                       >
-                        <GripVertical className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <GripVertical style={{ width: `${iconSize}px`, height: `${iconSize}px` }} className="stroke-[2.5]" />
                       </div>
 
-                      {/* Text input to enter and edit text in selected markup color */}
-                      <input
-                        type="text"
-                        value={box.text}
-                        onChange={e => handleUpdateTextBoxText(box.id, e.target.value)}
-                        onFocus={() => setSelectedTextBoxId(box.id)}
-                        placeholder="Enter note..."
-                        className="bg-transparent font-mono font-bold text-xs sm:text-sm px-1 py-0.5 outline-none min-w-[100px] max-w-[240px]"
-                        style={{
-                          color: boxColor,
-                          textShadow: '0 1px 2px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.9)',
-                          caretColor: boxColor,
-                        }}
-                        autoFocus={isSelected && !box.text}
-                      />
+                      {/* Scaled Text Input Container */}
+                      <div
+                        className="relative inline-grid items-center font-mono font-bold min-w-0 flex-1"
+                        style={{ gridTemplateColumns: '1fr', fontSize: `${fontSize}px` }}
+                      >
+                        {/* Hidden measuring span that dictates exact grid width and height */}
+                        <span
+                          className="invisible whitespace-pre-wrap px-1.5 py-0.5 col-start-1 row-start-1 pointer-events-none select-none break-words min-w-0"
+                          style={{
+                            minWidth: '2ch',
+                            maxWidth: '100%',
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                          }}
+                          aria-hidden="true"
+                        >
+                          {box.text ? (box.text.endsWith('\n') ? box.text + ' ' : box.text) : 'Note...'}
+                        </span>
+                        <textarea
+                          rows={1}
+                          value={box.text}
+                          onChange={e => handleUpdateTextBoxText(box.id, e.target.value)}
+                          onFocus={() => setSelectedTextBoxId(box.id)}
+                          placeholder="Note..."
+                          className="col-start-1 row-start-1 w-full h-full min-w-0 bg-transparent font-mono font-bold px-1.5 py-0.5 outline-none resize-none overflow-hidden break-words whitespace-pre-wrap"
+                          style={{
+                            fontSize: `${fontSize}px`,
+                            color: boxColor,
+                            textShadow: '0 1px 2px rgba(0, 0, 0, 0.95), 0 0 3px rgba(0, 0, 0, 0.9)',
+                            caretColor: boxColor,
+                            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                          }}
+                          autoFocus={isSelected && !box.text}
+                        />
+                      </div>
 
                       {/* Delete button to remove text box */}
                       <button
@@ -980,14 +1193,31 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
                           e.stopPropagation();
                           handleDeleteTextBox(box.id);
                         }}
-                        className="p-1 opacity-75 hover:opacity-100 rounded cursor-pointer transition-opacity"
-                        style={{ color: boxColor, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                        className="p-0.5 opacity-75 hover:opacity-100 rounded cursor-pointer transition-opacity mt-0.5 shrink-0"
+                        style={{ color: boxColor, textShadow: '0 1px 2px rgba(0,0,0,0.9)' }}
                         title="Delete text box"
                         aria-label="Delete text box"
                       >
-                        <X className="w-3.5 h-3.5 stroke-[2.5]" />
+                        <X style={{ width: `${iconSize}px`, height: `${iconSize}px` }} className="stroke-[2.5]" />
                       </button>
                     </div>
+
+                    {/* Visible corner resize handle when selected */}
+                    {isSelected && (
+                      <div
+                        onMouseDown={e => handleTextBoxResizePointerDown(e, box.id)}
+                        onTouchStart={e => handleTextBoxResizePointerDown(e, box.id)}
+                        className="absolute -bottom-2 -right-2 w-5 h-5 rounded-full bg-white border-2 flex items-center justify-center shadow-md touch-none cursor-nwse-resize hover:scale-125 active:scale-125 transition-transform z-30 select-none"
+                        style={{ borderColor: boxColor }}
+                        title="Drag to resize text box and font"
+                        aria-label="Drag to resize text box and font"
+                      >
+                        <div
+                          className="w-2 h-2 border-r-2 border-b-2"
+                          style={{ borderColor: boxColor }}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}

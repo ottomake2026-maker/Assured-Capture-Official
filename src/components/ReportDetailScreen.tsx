@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Report, Issue, ReportStatus } from '../types';
+import { Report, Issue, ReportStatus, ReportType, REPORT_TYPE_OPTIONS } from '../types';
 import { ALL_REPORT_STATUSES, StatusBadge } from './StatusBadge';
 import { ConfirmationDialog } from './ConfirmationDialog';
 import { InspectionHistoryModal } from './InspectionHistoryModal';
@@ -17,6 +17,7 @@ import {
   AlertCircle,
   Camera,
   ChevronRight,
+  ChevronDown,
   MapPin,
   Image as ImageIcon,
   ImagePlus,
@@ -111,6 +112,7 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
     report.jobReference || (initialRefData.prefix + initialRefData.number)
   );
   const [reportName, setReportName] = useState(report.reportName || '');
+  const [reportType, setReportType] = useState<ReportType>(report.reportType || 'photo_report');
   const [clientName, setClientName] = useState(report.clientName || '');
   const [address, setAddress] = useState(report.address || '');
   const [reportDate, setReportDate] = useState(report.reportDate || '');
@@ -159,6 +161,7 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
     setJobNumber(parsed.number);
     setJobReference(report.jobReference || (parsed.prefix + parsed.number));
     setReportName(report.reportName || '');
+    setReportType(report.reportType || 'photo_report');
     setClientName(report.clientName || '');
     setAddress(report.address || '');
     setReportDate(report.reportDate || '');
@@ -211,7 +214,10 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
             return;
           }
           ctx.drawImage(img, 0, 0, width, height);
-          resolve(canvas.toDataURL('image/jpeg', 0.85));
+          const result = canvas.toDataURL('image/jpeg', 0.85);
+          canvas.width = 0;
+          canvas.height = 0;
+          resolve(result);
         };
         img.onerror = () => resolve(e.target?.result as string);
         img.src = e.target?.result as string;
@@ -223,6 +229,7 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
 
   const handleImageFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     setIsProcessingImage(true);
     try {
@@ -238,6 +245,7 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
 
   const handleCameraFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     setIsProcessingImage(true);
     try {
@@ -308,10 +316,22 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
         ];
       }
 
+      const fullJobRef = jobReference.trim();
+      const isJobRefEntered =
+        fullJobRef !== '' &&
+        (!jobPrefix || fullJobRef !== jobPrefix.trim() || jobNumber.trim() !== '');
+
+      if ((isNew || isNewReport) && !isJobRefEntered) {
+        setSaveError('Please enter a Job Reference to save the report.');
+        setIsSaving(false);
+        return;
+      }
+
       const updatedReport: Report = {
         ...report,
-        jobReference: jobReference.trim(),
+        jobReference: fullJobRef,
         reportName: reportName.trim(),
+        reportType: reportType || 'photo_report',
         clientName: clientName.trim(),
         address: address.trim(),
         reportDate: reportDate.trim(),
@@ -475,6 +495,43 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
 
         {/* Inputs sitting cleanly with restrained 1px borders */}
         <div className="space-y-4">
+          {/* Report Type */}
+          <div>
+            <label
+              htmlFor="select_report_type"
+              className="block text-[11px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/80 mb-1.5"
+            >
+              REPORT TYPE
+            </label>
+            <div className="relative">
+              <select
+                id="select_report_type"
+                value={reportType}
+                onChange={e => {
+                  const val = e.target.value as ReportType;
+                  if (val === 'photo_report') {
+                    setReportType(val);
+                  }
+                }}
+                className="w-full appearance-none text-sm sm:text-base font-medium pl-3.5 pr-10 py-2.5 sm:py-3 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[44px] sm:min-h-[48px] cursor-pointer touch-manipulation shadow-2xs"
+              >
+                {REPORT_TYPE_OPTIONS.map(opt => (
+                  <option
+                    key={opt.value}
+                    value={opt.value}
+                    disabled={!opt.available}
+                    className={!opt.available ? 'text-slate-400 bg-slate-50' : 'text-[#0E1E2B] font-medium'}
+                  >
+                    {opt.label}{!opt.available ? ` (${opt.comingSoonText || 'Coming soon'})` : ''}
+                  </option>
+                ))}
+              </select>
+              <div className="absolute inset-y-0 right-0 pr-3.5 flex items-center pointer-events-none text-[#0E1E2B]/50">
+                <ChevronDown className="w-4 h-4 stroke-[2]" />
+              </div>
+            </div>
+          </div>
+
           {/* Job Reference & Report Name */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>

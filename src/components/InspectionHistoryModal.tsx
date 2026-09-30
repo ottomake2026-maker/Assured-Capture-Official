@@ -66,7 +66,7 @@ export const InspectionHistoryModal: React.FC<InspectionHistoryModalProps> = ({
         </div>
 
         {/* Historical records list */}
-        <div className="p-5 overflow-y-auto space-y-2.5 flex-1">
+        <div className="p-5 overflow-y-auto touch-scroll space-y-2.5 flex-1">
           {sortedHistory.length === 0 ? (
             <div className="text-center py-10 px-4">
               <History className="w-10 h-10 text-[#0E1E2B]/30 mx-auto mb-2 stroke-[1.5]" />

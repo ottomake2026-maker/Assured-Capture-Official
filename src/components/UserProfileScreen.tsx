@@ -11,7 +11,6 @@ import {
   User as UserIcon,
   Check,
   AlertCircle,
-  ExternalLink,
   LogOut,
   RefreshCw,
   Mail,
@@ -19,18 +18,10 @@ import {
   Key,
   Database,
   Trash2,
-  LogIn,
-  Cloud,
   CheckCircle2,
   Smartphone,
 } from 'lucide-react';
 import { PWAInstallButton } from './PWAInstallButton';
-import {
-  syncLocalDataToFirestore,
-  getLastFirestoreSyncTime,
-  formatSyncTime,
-  FirestoreSyncProgress,
-} from '../utils/firestoreSync';
 import { isFirestoreQuotaExhausted, subscribeToQuotaStatus, fetchUserProfileFromFirestore } from '../db/storage';
 import { optimizeAvatarImage } from '../utils/avatarUtils';
 
@@ -40,9 +31,9 @@ interface UserProfileScreenProps {
   onBack: () => void;
   onSaveProfile: (updated: UserProfile) => Promise<UserProfile | boolean | void> | void;
   onSignOut: () => void;
-  onRequestSignIn?: () => void;
   isGuest?: boolean;
   onSyncComplete?: () => Promise<void> | void;
+  onOpenAdminUsers?: () => void;
 }
 
 export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
@@ -51,34 +42,32 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
   onBack,
   onSaveProfile,
   onSignOut,
-  onRequestSignIn,
   isGuest,
-  onSyncComplete,
+  onOpenAdminUsers,
 }) => {
-  const isGuestMode = isGuest || !auth.currentUser;
   const [currentUser, setCurrentUser] = useState<any>(auth.currentUser);
 
-  // Single Profile Name field - empty for guest mode unless explicitly entered
+  // Profile Name field
   const [profileName, setProfileName] = useState<string>(
-    isGuestMode ? '' : (profile.profileName || profile.fullName || profile.name || profile.displayName || '')
+    profile.profileName || profile.fullName || profile.name || profile.displayName || ''
   );
   const [avatarUrl, setAvatarUrl] = useState<string>(
-    isGuestMode ? '' : (profile.avatarUrl || profile.photoURL || '')
+    profile.avatarUrl || profile.photoURL || ''
   );
   const [email, setEmail] = useState<string>(
-    isGuestMode ? '' : (profile.email || auth.currentUser?.email || '')
+    auth.currentUser?.email || profile.email || ''
   );
 
   // Sync state with incoming props and auth changes
   useEffect(() => {
-    if (!auth.currentUser || isGuest) {
-      setProfileName('');
-      setAvatarUrl('');
-      setEmail('');
+    if (auth.currentUser) {
+      setProfileName(profile.profileName || profile.fullName || profile.name || auth.currentUser.displayName || '');
+      setAvatarUrl(profile.avatarUrl || profile.photoURL || auth.currentUser.photoURL || '');
+      setEmail(auth.currentUser.email || profile.email || '');
     } else {
-      setProfileName(profile.profileName || profile.fullName || profile.name || auth.currentUser?.displayName || '');
-      setAvatarUrl(profile.avatarUrl || profile.photoURL || auth.currentUser?.photoURL || '');
-      setEmail(profile.email || auth.currentUser?.email || '');
+      setProfileName(profile.profileName || profile.fullName || profile.name || '');
+      setAvatarUrl(profile.avatarUrl || profile.photoURL || '');
+      setEmail('');
     }
   }, [profile, isGuest]);
 
@@ -86,7 +75,7 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
   useEffect(() => {
     let isMounted = true;
     const uid = auth.currentUser?.uid;
-    if (uid && !isGuest) {
+    if (uid) {
       fetchUserProfileFromFirestore(uid).then((fresh) => {
         if (fresh && isMounted) {
           const freshName = fresh.profileName || fresh.fullName || fresh.name || '';
@@ -101,7 +90,7 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
     return () => {
       isMounted = false;
     };
-  }, [isGuest]);
+  }, []);
 
   // Profile save feedback and loading states
   const [isSaving, setIsSaving] = useState(false);
@@ -112,7 +101,6 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
   const [isOptimizingAvatar, setIsOptimizingAvatar] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
-  const [lastFirestoreSyncTime, setLastFirestoreSyncTime] = useState<string | null>(getLastFirestoreSyncTime());
   const [quotaExhausted, setQuotaExhausted] = useState<boolean>(isFirestoreQuotaExhausted());
 
   // Subscribe to quota status changes
@@ -130,21 +118,19 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Initialize Auth listener on mount
+  // Initialize Auth listener on mount to always reflect the true Firebase Auth state
   useEffect(() => {
     const unsubscribe = initAuth((user) => {
       setCurrentUser(user);
       if (user) {
         setEmail(user.email || '');
-        if (user.displayName) {
-          if (!profileName) setProfileName(user.displayName);
+        if (user.displayName && !profileName) {
+          setProfileName(user.displayName);
         }
-        if (user.photoURL) {
-          if (!avatarUrl) setAvatarUrl(user.photoURL);
+        if (user.photoURL && !avatarUrl) {
+          setAvatarUrl(user.photoURL);
         }
       } else {
-        setProfileName('');
-        setAvatarUrl('');
         setEmail('');
       }
     });
@@ -152,7 +138,7 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
     return () => {
       if (unsubscribe) unsubscribe();
     };
-  }, []);
+  }, [profileName, avatarUrl]);
 
   // Handle Photo upload / file select for profile picture
   const handleAvatarFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -255,7 +241,7 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving || isOptimizingAvatar) {
-      return; // Prevent duplicate requests
+      return;
     }
 
     setIsSaving(true);
@@ -304,8 +290,8 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
       console.error('Account deletion error:', err);
       setDeleteAccountError(
         err?.code === 'auth/requires-recent-login'
-          ? 'For security, please sign out and sign back in to refresh your credentials, then try deleting your account.'
-          : (err?.message || 'Could not delete account. Please try signing out and signing back in.')
+          ? 'For security, please sign in via your access link again before deleting your account.'
+          : (err?.message || 'Could not delete account. Please try requesting a new access link.')
       );
       setShowDeleteAccountModal(false);
     } finally {
@@ -313,11 +299,13 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
     }
   };
 
-  const signInProvider = !currentUser
-    ? 'Guest Session (No Account)'
-    : currentUser?.providerData?.[0]?.providerId === 'google.com'
-    ? 'Google Account'
-    : 'Email & Password';
+  const signInMethod = currentUser
+    ? 'Email Link (Passwordless)'
+    : 'Admin-Issued Access Link';
+
+  const sessionStatus = currentUser
+    ? 'Authenticated'
+    : 'No Active Session';
 
   return (
     <div id="user_profile_screen" className="max-w-4xl mx-auto px-4 py-6 sm:py-8 space-y-6">
@@ -363,7 +351,7 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
                 currentUser ? 'bg-[#0E1E2B]' : 'bg-[#E11D48]'
               }`}
             />
-            <span>{currentUser ? 'Active · Authenticated' : 'Guest Mode · Device Only'}</span>
+            <span>{currentUser ? 'Authenticated' : 'Local Storage Mode'}</span>
           </span>
         </div>
 
@@ -411,12 +399,12 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
 
               <div className="flex-1 text-center sm:text-left space-y-1.5">
                 <h3 className="text-base font-brand font-bold text-[#0E1E2B] tracking-wide">
-                  {currentUser ? (profileName || profile.profileName || profile.name || 'Authenticated User') : 'GUEST MODE'}
+                  {currentUser ? (profileName || profile.profileName || profile.name || 'Authenticated User') : (profileName || 'Inspector Profile')}
                 </h3>
                 <p className="text-xs text-[#0E1E2B]/60">
-                  {currentUser ? (email || currentUser.email || 'No email attached') : 'Device Only · No Account Associated'}
+                  {currentUser ? (email || currentUser.email || 'No email attached') : 'Local Device Mode'}
                 </p>
-                {currentUser ? (
+                {currentUser && (
                   <div className="pt-2 flex flex-wrap gap-2 justify-center sm:justify-start">
                     <button
                       type="button"
@@ -439,19 +427,6 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
                       </button>
                     )}
                   </div>
-                ) : (
-                  onRequestSignIn && (
-                    <div className="pt-2 flex flex-wrap gap-2 justify-center sm:justify-start">
-                      <button
-                        type="button"
-                        onClick={onRequestSignIn}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#628EF7]/10 hover:bg-[#628EF7]/20 text-[#2B5AC5] text-xs font-bold rounded-lg border border-[#628EF7]/30 transition-all cursor-pointer min-h-[38px]"
-                      >
-                        <LogIn className="w-3.5 h-3.5" />
-                        <span>Sign In or Create Account</span>
-                      </button>
-                    </div>
-                  )
                 )}
                 {avatarError && (
                   <div className="text-xs text-rose-600 font-medium flex items-center gap-1 mt-1 justify-center sm:justify-start">
@@ -476,7 +451,7 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
                     value={profileName}
                     disabled={isSaving || isOptimizingAvatar}
                     onChange={(e) => setProfileName(e.target.value)}
-                    placeholder={currentUser ? "e.g. Sarah Jenkins" : "Enter profile name"}
+                    placeholder="e.g. Inspector Name"
                     className="w-full pl-10 pr-3.5 py-2.5 bg-white border border-[#0E1E2B]/20 rounded-lg text-xs sm:text-sm text-[#0E1E2B] focus:outline-none focus:ring-2 focus:ring-[#628EF7]/20 focus:border-[#628EF7] transition-all min-h-[44px] disabled:bg-[#F4F6F8]"
                   />
                 </div>
@@ -508,11 +483,11 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
                   Stable Account Identifier (UID)
                 </div>
                 <div className="font-mono text-xs text-[#0E1E2B] font-semibold break-all">
-                  {currentUser?.uid || 'null'}
+                  {currentUser?.uid || 'None'}
                 </div>
               </div>
               <span className="text-[11px] font-mono text-[#0E1E2B]/50 bg-white px-2.5 py-1 rounded-md border border-[#0E1E2B]/15 self-start sm:self-auto">
-                {currentUser ? 'Authoritative Key' : 'No Account'}
+                {currentUser ? 'Authoritative Key' : 'Local Session'}
               </span>
             </div>
 
@@ -553,6 +528,47 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
           </form>
         </div>
       </section>
+
+      {/* ADMIN PORTAL SECTION (Only displayed if role is admin or primary administrator) */}
+      {(profile.role === 'admin' || (currentUser?.email && currentUser.email.toLowerCase() === 'ottomake2026@gmail.com')) && (
+        <section className="space-y-2.5">
+          <div className="px-1 flex items-center justify-between">
+            <h2 className="text-xs font-mono font-bold uppercase tracking-[0.18em] text-[#628EF7]">
+              ADMINISTRATION &amp; ACCESS MANAGEMENT
+            </h2>
+            <span className="font-mono text-[10px] font-bold uppercase tracking-wider bg-[#628EF7] text-white px-2 py-0.5 rounded">
+              ADMIN ROLE ACTIVE
+            </span>
+          </div>
+
+          <div className="bg-[#B2E5F6]/25 border border-[#628EF7]/40 rounded-xl p-5 sm:p-6 space-y-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-[#628EF7]" />
+                  <h3 className="text-base font-brand font-bold text-[#0E1E2B]">
+                    Admin Portal · Users Management
+                  </h3>
+                </div>
+                <p className="text-xs text-[#0E1E2B]/70">
+                  Authorize team members, review access status, and manage active/disabled accounts.
+                </p>
+              </div>
+
+              {onOpenAdminUsers && (
+                <button
+                  type="button"
+                  onClick={onOpenAdminUsers}
+                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#0E1E2B] hover:bg-[#1A2E3D] active:bg-[#07131D] text-white font-bold text-xs uppercase tracking-wider rounded-lg shadow-sm transition-all touch-manipulation cursor-pointer min-h-[44px] shrink-0"
+                >
+                  <Key className="w-4 h-4 text-[#B2E5F6]" />
+                  <span>Open Admin Users</span>
+                </button>
+              )}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* 2. SECTION: DATA / REPORTS · STORAGE & SYNC */}
       <section className="space-y-2.5">
@@ -604,7 +620,7 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
         </div>
       </section>
 
-      {/* SECTION: OFFLINE STORAGE & DEVICE INSTALLATION (PWA) */}
+      {/* 3. SECTION: OFFLINE STORAGE & DEVICE INSTALLATION (PWA) */}
       <section className="space-y-2.5">
         <div className="px-1">
           <h2 className="text-xs font-mono font-bold uppercase tracking-[0.18em] text-[#0E1E2B]/70">
@@ -655,7 +671,7 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
               </div>
               <div className="text-sm font-bold text-[#0E1E2B] flex items-center gap-2">
                 <Key className="w-4 h-4 text-[#0E1E2B]" />
-                <span>{signInProvider}</span>
+                <span>{signInMethod}</span>
               </div>
             </div>
 
@@ -665,7 +681,7 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
               </div>
               <div className="text-sm font-bold text-[#0E1E2B] flex items-center gap-2">
                 <ShieldCheck className="w-4 h-4 text-[#0E1E2B]" />
-                <span>{currentUser ? 'Authenticated Session Active' : 'Guest Session (Stored on this Device)'}</span>
+                <span>{sessionStatus}</span>
               </div>
             </div>
           </div>
@@ -694,27 +710,14 @@ export const UserProfileScreen: React.FC<UserProfileScreenProps> = ({
                 </button>
               </>
             ) : (
-              <>
-                <button
-                  type="button"
-                  id="btn_profile_link_account"
-                  onClick={onRequestSignIn || onSignOut}
-                  className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#628EF7] hover:bg-[#4E7AF2] active:bg-[#3E69E0] text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer min-h-[44px]"
-                >
-                  <UserIcon className="w-4 h-4" />
-                  <span>Sign In or Register</span>
-                </button>
-
-                <button
-                  type="button"
-                  id="btn_profile_exit_guest"
-                  onClick={onSignOut}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white hover:bg-[#F4F6F8] text-[#0E1E2B] text-xs font-bold rounded-lg border border-[#0E1E2B]/20 transition-all cursor-pointer min-h-[44px]"
-                >
-                  <LogOut className="w-4 h-4 text-[#0E1E2B]" />
-                  <span>Exit Guest Mode</span>
-                </button>
-              </>
+              <button
+                type="button"
+                id="btn_profile_back_to_reports"
+                onClick={onBack}
+                className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#628EF7] hover:bg-[#4E7AF2] active:bg-[#3E69E0] text-white rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer min-h-[44px]"
+              >
+                <span>Back to Reports</span>
+              </button>
             )}
           </div>
 

@@ -11,18 +11,21 @@ const PORT = Number(process.env.PORT) || 3000;
 
 const distPath = path.join(__dirname, 'dist');
 
+// Serve static assets from built distribution directory if present
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
-
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-} else {
-  app.get('*', (req, res) => {
-    res.status(200).send('Application is ready.');
-  });
 }
 
+// Fallback SPA router for client side navigation
+app.get('*', (req, res) => {
+  const indexPath = path.join(distPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(200).send('Assured Capture field inspection service active.');
+  }
+});
+
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Assured Capture server listening on 0.0.0.0:${PORT}`);
 });

@@ -233,6 +233,19 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const [uploadTasks, setUploadTasks] = useState<UploadTask[]>([]);
   const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  const previewUrlsRef = useRef<Set<string>>(new Set());
+
+  // Clean up all allocated object URLs on component unmount
+  useEffect(() => {
+    return () => {
+      previewUrlsRef.current.forEach(url => {
+        try {
+          URL.revokeObjectURL(url);
+        } catch (_) {}
+      });
+      previewUrlsRef.current.clear();
+    };
+  }, []);
 
   useEffect(() => {
     setIssueName(draft?.issueName ?? issue.issueName ?? '');
@@ -264,6 +277,24 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
   // Handle Save Issue information
   const handleSaveIssueInfo = async () => {
     if (isSaving) return;
+
+    const trimmedName = issueName.trim();
+    const trimmedDesc = issueDescription.trim();
+    const trimmedNotes = notes.trim();
+
+    // Meaningful content rule: require at least title/name, description, notes, or evidence photos
+    const hasMeaningfulContent =
+      trimmedName !== '' ||
+      trimmedDesc !== '' ||
+      trimmedNotes !== '' ||
+      localPhotos.length > 0 ||
+      uploadTasks.length > 0;
+
+    if (!hasMeaningfulContent) {
+      setSaveError('Please enter an issue title, description, or add evidence to save this issue.');
+      return;
+    }
+
     setIsSaving(true);
     setSaveError(null);
     setSaveSuccess(false);
@@ -271,9 +302,9 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
     try {
       const updated: Issue = {
         ...issue,
-        issueName: issueName.trim(),
-        issueDescription: issueDescription.trim(),
-        notes: notes.trim(),
+        issueName: trimmedName,
+        issueDescription: trimmedDesc,
+        notes: trimmedNotes,
       };
       const ok = await onSaveIssue(updated);
       if (ok) {
@@ -313,8 +344,9 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
         prev.map(t => (t.id === taskId ? { ...t, progress: 20, state: 'uploading' } : t))
       );
 
-      // Extract original capture timestamp from EXIF DateTimeOriginal before compression strips it
-      const capturedAt = await extractExifCaptureDate(file);
+      // Extract original capture timestamp from EXIF DateTimeOriginal, falling back to file lastModified or current time
+      const exifDate = await extractExifCaptureDate(file);
+      const capturedAt = exifDate || (file.lastModified ? new Date(file.lastModified).toISOString() : new Date().toISOString());
 
       const dataUrl = await readFileAsDataUrl(file);
       // Intelligently compress image (2000-2500px max edge, ~80% quality JPEG, preserving orientation)
@@ -352,16 +384,31 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
         updatedAt: now,
       };
 
+      // Ensure parent issue is saved before attaching photo evidence
+      await onSaveIssue({
+        ...issue,
+        issueName: issueName.trim(),
+        issueDescription: issueDescription.trim(),
+        notes: notes.trim(),
+      });
+
       // Persist to storage
       await savePhoto(newPhoto);
 
       // Mark complete
       setUploadTasks(prev =>
-        prev.map(t =>
-          t.id === taskId
-            ? { ...t, progress: 100, state: 'complete', photoId }
-            : t
-        )
+        prev.map(t => {
+          if (t.id === taskId) {
+            if (t.previewUrl && previewUrlsRef.current.has(t.previewUrl)) {
+              try {
+                URL.revokeObjectURL(t.previewUrl);
+              } catch (_) {}
+              previewUrlsRef.current.delete(t.previewUrl);
+            }
+            return { ...t, progress: 100, state: 'complete', photoId };
+          }
+          return t;
+        })
       );
 
       // Notify parent to refresh photo list
@@ -388,13 +435,14 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
     if (!files || files.length === 0) return;
 
     const fileList = Array.from(files);
-    // Reset input so same images can be re-selected if needed
+    // Reset input immediately so same images can be re-selected if needed
     e.target.value = '';
 
     // Create tasks for every selected image
     const newTasks: UploadTask[] = fileList.map(f => {
       const taskId = generateId();
       const previewUrl = URL.createObjectURL(f);
+      previewUrlsRef.current.add(previewUrl);
       return {
         id: taskId,
         fileName: f.name,
@@ -425,6 +473,7 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
   const handleCameraPhoto = async (file: File) => {
     const taskId = generateId();
     const previewUrl = URL.createObjectURL(file);
+    previewUrlsRef.current.add(previewUrl);
     const newTask: UploadTask = {
       id: taskId,
       fileName: file.name || 'field_camera_photo.jpg',
@@ -442,6 +491,7 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
   // Handle native camera capture input change
   const handleCameraInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
     try {
       await handleCameraPhoto(file);
@@ -596,7 +646,10 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <button
             type="button"
-            onClick={() => cameraInputRef.current?.click()}
+            onClick={() => {
+              if (cameraInputRef.current) cameraInputRef.current.value = '';
+              cameraInputRef.current?.click();
+            }}
             className="w-full py-3.5 px-5 rounded-lg font-bold text-xs uppercase tracking-wider min-h-[48px] flex items-center justify-center gap-2 bg-[#628EF7] hover:bg-[#4E7AF2] active:bg-[#3E69E0] text-white shadow-sm transition-colors touch-manipulation active:scale-[0.99] focus:outline-none focus:ring-4 focus:ring-[#628EF7]/25 cursor-pointer"
             aria-label="Take inspection photo using camera"
           >
@@ -606,7 +659,10 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
 
           <button
             type="button"
-            onClick={() => galleryInputRef.current?.click()}
+            onClick={() => {
+              if (galleryInputRef.current) galleryInputRef.current.value = '';
+              galleryInputRef.current?.click();
+            }}
             className="w-full py-3.5 px-5 rounded-lg font-bold text-xs uppercase tracking-wider min-h-[48px] flex items-center justify-center gap-2 bg-white hover:bg-[#F4F6F8] active:bg-[#E5E8EB] text-[#0E1E2B] border border-[#0E1E2B]/20 hover:border-[#0E1E2B] transition-colors touch-manipulation active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-[#628EF7]/30 cursor-pointer"
             aria-label="Choose multiple photos from gallery"
           >

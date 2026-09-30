@@ -35,7 +35,8 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({
       <aside
         id="offline_status_indicator"
         aria-label="Offline status"
-        className="fixed bottom-4 left-4 right-4 sm:left-6 sm:right-auto sm:max-w-md z-40 animate-in slide-in-from-bottom duration-300 pointer-events-auto"
+        className="fixed left-4 right-4 sm:left-6 sm:right-auto sm:max-w-md z-40 animate-in slide-in-from-bottom duration-300 pointer-events-auto"
+        style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
       >
         <div className="p-3.5 bg-[#0E1E2B] border border-amber-500/40 rounded-xl shadow-xl flex items-center justify-between gap-3 text-white">
           <div className="flex items-center gap-2.5 min-w-0">
@@ -70,7 +71,8 @@ export const OfflineIndicator: React.FC<OfflineIndicatorProps> = ({
       <aside
         id="reconnected_status_indicator"
         aria-label="Reconnected status"
-        className="fixed bottom-4 left-4 right-4 sm:left-6 sm:right-auto sm:max-w-md z-40 animate-in slide-in-from-bottom duration-300 pointer-events-auto"
+        className="fixed left-4 right-4 sm:left-6 sm:right-auto sm:max-w-md z-40 animate-in slide-in-from-bottom duration-300 pointer-events-auto"
+        style={{ bottom: 'calc(1rem + env(safe-area-inset-bottom, 0px))' }}
       >
         <div className="p-3.5 bg-[#0E1E2B] border border-[#628EF7]/50 rounded-xl shadow-xl flex items-center justify-between gap-3 text-white">
           <div className="flex items-center gap-2.5 min-w-0">

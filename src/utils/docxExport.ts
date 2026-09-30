@@ -41,23 +41,22 @@ const CONTENT_WIDTH_TWIPS = PAGE_WIDTH_TWIPS - MARGIN_TWIPS * 2; // 10800 twips
 const HEADER_LEFT_WIDTH = 7344;
 const HEADER_RIGHT_WIDTH = 3456;
 
-// Two-photo layout with small, intentional horizontal gap:
-// Left photo column: 5280 twips
-// Middle gap column: 240 twips (~16px / ~0.16 inches)
-// Right photo column: 5280 twips
-// Total sum = 5280 + 240 + 5280 = 10800 twips (exact printable width)
-const PHOTO_COL_WIDTH = 5280;
-const PHOTO_GAP_WIDTH = 240;
+// Two-photo layout with small, deliberate 8 pt (~160 twips) horizontal gap:
+// Left photo column: 5320 twips (266 pt)
+// Middle gap column: 160 twips (8 pt)
+// Right photo column: 5320 twips (266 pt)
+// Total sum = 5320 + 160 + 5320 = 10800 twips (exact printable width)
+const PHOTO_COL_WIDTH = 5320;
+const PHOTO_GAP_WIDTH = 160;
 
 // Photo frame dimensions in DOCX (96 DPI pixels)
-// 5280 twips / 15 twips/pixel = 352px width
-// Height is 210px (maintains ~1.68 aspect ratio matching target canvas)
+// Width: 352px (~264 pt), Height: 216px (~162 pt) to fit inside 266pt column with 8pt gap
 const PHOTO_FRAME_WIDTH = 352;
-const PHOTO_FRAME_HEIGHT = 210;
+const PHOTO_FRAME_HEIGHT = 216;
 
-// High-DPI canvas render dimensions (704 x 420 = exact 2x supersampling of 352x210)
+// High-DPI canvas render dimensions (704 x 432 = exact 2x supersampling of 352x216)
 const TARGET_CANVAS_WIDTH = 704;
-const TARGET_CANVAS_HEIGHT = 420;
+const TARGET_CANVAS_HEIGHT = 432;
 
 // Footer columns: Left: 4320, Middle: 3780, Right: 2700 -> sum = 10800
 const FOOTER_LEFT_WIDTH = 4320;
@@ -688,7 +687,7 @@ async function buildPhotoReportDocument(
 
     return new TableCell({
       width: { size: PHOTO_COL_WIDTH, type: WidthType.DXA },
-      margins: { top: 40, bottom: 120, left: 0, right: 0 },
+      margins: { top: 40, bottom: 180, left: 0, right: 0 },
       verticalAlign: VerticalAlign.TOP,
       borders: {
         top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },

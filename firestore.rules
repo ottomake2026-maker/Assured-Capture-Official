@@ -14,9 +14,28 @@ service cloud.firestore {
       return isAuthenticated() && exists(/databases/$(database)/documents/reports/$(reportId)) && get(/databases/$(database)/documents/reports/$(reportId)).data.userId == request.auth.uid;
     }
 
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email == 'ottomake2026@gmail.com' ||
+        (
+          exists(/databases/$(database)/documents/authorized_users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/authorized_users/$(request.auth.uid)).data.role == 'admin' &&
+          get(/databases/$(database)/documents/authorized_users/$(request.auth.uid)).data.status == 'Active'
+        )
+      );
+    }
+
     // Default safety catch-all
     match /{document=**} {
       allow read, write: if false;
+    }
+
+    // Authorized Users Directory (Admin Only for list/write; Users can get their own record)
+    match /authorized_users/{userId} {
+      allow list: if isAdmin();
+      allow get: if isAuthenticated() && (request.auth.uid == userId || (resource != null && resource.data.email == request.auth.token.email) || isAdmin());
+      allow create: if isAuthenticated() && (isAdmin() || request.auth.token.email == 'ottomake2026@gmail.com');
+      allow update, delete: if isAdmin();
     }
 
     // User Profile
