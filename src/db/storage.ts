@@ -5,130 +5,86 @@ import { updateProfile } from 'firebase/auth';
 import { enqueueSync, clearSyncQueueForUser } from './syncQueue';
 
 const DB_NAME = 'AssuredCaptureDB';
-// Target DB version is at least 3 to include reports, issues, photos, and syncQueue
-const TARGET_DB_VERSION = 3;
+const DB_VERSION = 5;
 
 let dbPromise: Promise<IDBDatabase> | null = null;
-
-function setupSchema(db: IDBDatabase) {
-  if (!db.objectStoreNames.contains('reports')) {
-    db.createObjectStore('reports', { keyPath: 'id' });
-  }
-
-  if (!db.objectStoreNames.contains('issues')) {
-    const issueStore = db.createObjectStore('issues', { keyPath: 'id' });
-    issueStore.createIndex('reportId', 'reportId', { unique: false });
-  }
-
-  if (!db.objectStoreNames.contains('photos')) {
-    const photoStore = db.createObjectStore('photos', { keyPath: 'id' });
-    photoStore.createIndex('issueId', 'issueId', { unique: false });
-    photoStore.createIndex('reportId', 'reportId', { unique: false });
-  }
-
-  if (!db.objectStoreNames.contains('syncQueue')) {
-    const syncStore = db.createObjectStore('syncQueue', { keyPath: 'id' });
-    syncStore.createIndex('status', 'status', { unique: false });
-    syncStore.createIndex('userId', 'userId', { unique: false });
-  }
-}
-
-function hasRequiredStores(db: IDBDatabase): boolean {
-  return (
-    db.objectStoreNames.contains('reports') &&
-    db.objectStoreNames.contains('issues') &&
-    db.objectStoreNames.contains('photos') &&
-    db.objectStoreNames.contains('syncQueue')
-  );
-}
-
-function openDatabaseInternal(targetVersion?: number): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    // If targetVersion is provided, pass it; otherwise open without version to inspect current version
-    const request = targetVersion !== undefined
-      ? indexedDB.open(DB_NAME, targetVersion)
-      : indexedDB.open(DB_NAME);
-
-    request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
-      const db = (event.target as IDBOpenDBRequest).result;
-      setupSchema(db);
-    };
-
-    request.onsuccess = () => {
-      const db = request.result;
-
-      // Handle connection closing or versionchange from other tabs
-      db.onversionchange = () => {
-        db.close();
-        dbPromise = null;
-      };
-
-      // Check if all required object stores exist.
-      // If the database was opened at an existing version that is missing newly required stores,
-      // close it and upgrade it by incrementing db.version + 1.
-      if (!hasRequiredStores(db)) {
-        const nextVersion = db.version + 1;
-        db.close();
-        openDatabaseInternal(nextVersion).then(resolve).catch(reject);
-        return;
-      }
-
-      resolve(db);
-    };
-
-    request.onerror = () => {
-      const error = request.error;
-      // If we got a VersionError ("The requested version (X) is less than the existing version (Y)"):
-      if (error && (error.name === 'VersionError' || error.message?.includes('less than the existing version'))) {
-        // Parse the existing version from the error message if possible
-        const match = error.message?.match(/existing version \((\d+)\)/i);
-        const existingVer = match ? parseInt(match[1], 10) : undefined;
-        // Retry opening without version or with the existing version
-        openDatabaseInternal(existingVer).then(resolve).catch(reject);
-        return;
-      }
-      reject(error || new Error('Failed to open IndexedDB'));
-    };
-
-    request.onblocked = () => {
-      console.warn('IndexedDB database upgrade blocked: please close other tabs of this application.');
-    };
-  });
-}
 
 export function getDB(): Promise<IDBDatabase> {
   if (dbPromise) return dbPromise;
 
-  dbPromise = (async () => {
-    // 1. If indexedDB.databases is available, check if the DB exists with a higher version
-    let initialVersion: number | undefined = TARGET_DB_VERSION;
-    if (typeof indexedDB !== 'undefined' && typeof indexedDB.databases === 'function') {
-      try {
-        const dbs = await indexedDB.databases();
-        const existing = dbs.find((d) => d.name === DB_NAME);
-        if (existing && typeof existing.version === 'number' && existing.version > TARGET_DB_VERSION) {
-          initialVersion = existing.version;
+  dbPromise = new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+    request.onupgradeneeded = (event: IDBVersionChangeEvent) => {
+      const db = (event.target as IDBOpenDBRequest).result;
+      const transaction = (event.target as IDBOpenDBRequest).transaction;
+
+      // 1. reports object store
+      if (!db.objectStoreNames.contains('reports')) {
+        db.createObjectStore('reports', { keyPath: 'id' });
+      }
+
+      // 2. issues object store & indexes
+      let issueStore: IDBObjectStore;
+      if (!db.objectStoreNames.contains('issues')) {
+        issueStore = db.createObjectStore('issues', { keyPath: 'id' });
+      } else if (transaction) {
+        issueStore = transaction.objectStore('issues');
+      }
+      if (issueStore! && !issueStore.indexNames.contains('reportId')) {
+        issueStore.createIndex('reportId', 'reportId', { unique: false });
+      }
+
+      // 3. photos object store & indexes
+      let photoStore: IDBObjectStore;
+      if (!db.objectStoreNames.contains('photos')) {
+        photoStore = db.createObjectStore('photos', { keyPath: 'id' });
+      } else if (transaction) {
+        photoStore = transaction.objectStore('photos');
+      }
+      if (photoStore!) {
+        if (!photoStore.indexNames.contains('issueId')) {
+          photoStore.createIndex('issueId', 'issueId', { unique: false });
         }
-      } catch {
-        // ignore
+        if (!photoStore.indexNames.contains('reportId')) {
+          photoStore.createIndex('reportId', 'reportId', { unique: false });
+        }
       }
-    }
 
-    try {
-      return await openDatabaseInternal(initialVersion);
-    } catch (err: any) {
-      // If opening with initialVersion failed due to VersionError or any version mismatch,
-      // fallback to opening without version parameter (which opens at current version)
-      if (err?.name === 'VersionError' || err?.message?.includes('version')) {
-        return await openDatabaseInternal(undefined);
+      // 4. syncQueue object store & indexes
+      let syncStore: IDBObjectStore;
+      if (!db.objectStoreNames.contains('syncQueue')) {
+        syncStore = db.createObjectStore('syncQueue', { keyPath: 'id' });
+      } else if (transaction) {
+        syncStore = transaction.objectStore('syncQueue');
       }
-      throw err;
-    }
-  })();
+      if (syncStore!) {
+        if (!syncStore.indexNames.contains('status')) {
+          syncStore.createIndex('status', 'status', { unique: false });
+        }
+        if (!syncStore.indexNames.contains('userId')) {
+          syncStore.createIndex('userId', 'userId', { unique: false });
+        }
+      }
+    };
 
-  // If opening fails, reset dbPromise so subsequent calls can retry instead of caching failure
-  dbPromise.catch(() => {
-    dbPromise = null;
+    request.onsuccess = () => {
+      const db = request.result;
+      db.onversionchange = () => {
+        db.close();
+        dbPromise = null;
+      };
+      db.onclose = () => {
+        dbPromise = null;
+      };
+      resolve(db);
+    };
+
+    request.onerror = () => {
+      dbPromise = null;
+      console.error('IndexedDB open error:', request.error);
+      reject(request.error);
+    };
   });
 
   return dbPromise;
@@ -242,7 +198,7 @@ export function createNewReportDraft(): Report {
     userId: currentUserId,
     jobReference: `BBC${yy}-`,
     reportName: '',
-    reportType: 'photo_report',
+    reportType: 'Photo Report',
     clientName: '',
     address: '',
     reportDate: today,
@@ -267,8 +223,9 @@ export async function dataUrlToBlob(dataUrl: string): Promise<Blob> {
  * Intelligent Image compression utility for inspection photography:
  * - Measures actual Blob byte size.
  * - Targets MAXIMUM IMAGE SIZE: 700 KB (716,800 bytes) so remaining Firestore metadata fits safely below 1 MB.
- * - Streamlined single-pass scaling specifically designed to avoid memory exhaustion on iPhone Safari.
- * - Explicitly cleans up canvas backing buffers and ImageBitmaps to prevent iOS WebKit OOM crashes.
+ * - If initial image is <= 700 KB and JPEG, accepts it without recompressing unnecessarily.
+ * - Systematically tests dimensions (1400, 1200, 1000, 800, 600, 500) and qualities (0.70 down to 0.20)
+ *   until output is strictly <= 700 KB.
  */
 export async function ensureSafeImageSize(dataUrl?: string): Promise<string> {
   if (!dataUrl || !dataUrl.startsWith('data:image')) return dataUrl || '';
@@ -284,24 +241,8 @@ export async function ensureSafeImageSize(dataUrl?: string): Promise<string> {
   }
 
   return new Promise(async (resolve) => {
-    let imgBitmap: ImageBitmap | null = null;
-    let canvas: HTMLCanvasElement | null = null;
-
-    const cleanup = () => {
-      if (imgBitmap) {
-        try {
-          imgBitmap.close?.();
-        } catch (_) {}
-        imgBitmap = null;
-      }
-      if (canvas) {
-        canvas.width = 0;
-        canvas.height = 0;
-        canvas = null;
-      }
-    };
-
     try {
+      let imgBitmap: ImageBitmap | null = null;
       let origW = 0;
       let origH = 0;
 
@@ -309,95 +250,78 @@ export async function ensureSafeImageSize(dataUrl?: string): Promise<string> {
         const response = await fetch(dataUrl);
         const blob = await response.blob();
         if (typeof createImageBitmap !== 'undefined') {
-          try {
-            imgBitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
-            origW = imgBitmap.width;
-            origH = imgBitmap.height;
-          } catch {
-            imgBitmap = await createImageBitmap(blob);
-            origW = imgBitmap.width;
-            origH = imgBitmap.height;
-          }
+          imgBitmap = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+          origW = imgBitmap.width;
+          origH = imgBitmap.height;
         }
       } catch {}
 
       const processSource = async (source: CanvasImageSource, w: number, h: number) => {
         if (!w || !h) {
-          cleanup();
+          if (imgBitmap) imgBitmap.close?.();
           resolve(dataUrl);
           return;
         }
 
-        // Target maximum dimension for inspection photo clarity
-        const maxDim = 1600;
-        let width = w;
-        let height = h;
+        const dimensions = [1400, 1200, 1000, 800, 600, 500];
+        const qualities = [0.70, 0.60, 0.50, 0.40, 0.30, 0.20];
 
-        if (w > maxDim || h > maxDim) {
-          if (w > h) {
-            height = Math.round((h * maxDim) / w);
-            width = maxDim;
-          } else {
-            width = Math.round((w * maxDim) / h);
-            height = maxDim;
+        let bestDataUrl = dataUrl;
+        let smallestSize = Infinity;
+
+        for (const maxDim of dimensions) {
+          for (const quality of qualities) {
+            let width = w;
+            let height = h;
+            const needsDownscale = w > maxDim || h > maxDim;
+            if (needsDownscale) {
+              if (w > h) {
+                height = Math.round((h * maxDim) / w);
+                width = maxDim;
+              } else {
+                width = Math.round((w * maxDim) / h);
+                height = maxDim;
+              }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) continue;
+
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(source, 0, 0, width, height);
+
+            const blob: Blob | null = await new Promise((res) => {
+              canvas.toBlob((b) => res(b), 'image/jpeg', quality);
+            });
+
+            if (blob) {
+              const sizeBytes = blob.size;
+              const dataUrlResult = await new Promise<string>((res) => {
+                const reader = new FileReader();
+                reader.onloadend = () => res(reader.result as string);
+                reader.readAsDataURL(blob);
+              });
+
+              if (sizeBytes < smallestSize) {
+                smallestSize = sizeBytes;
+                bestDataUrl = dataUrlResult;
+              }
+
+              if (sizeBytes <= 716800) {
+                if (imgBitmap) imgBitmap.close?.();
+                resolve(bestDataUrl);
+                return;
+              }
+            }
           }
         }
 
-        canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-
-        if (!ctx) {
-          cleanup();
-          resolve(dataUrl);
-          return;
-        }
-
-        ctx.imageSmoothingEnabled = true;
-        ctx.imageSmoothingQuality = 'high';
-        ctx.drawImage(source, 0, 0, width, height);
-
-        // Attempt 1: High quality 0.82
-        let blob: Blob | null = await new Promise((res) => {
-          canvas?.toBlob((b) => res(b), 'image/jpeg', 0.82);
-        });
-
-        // Attempt 2: If still > 700KB, drop quality to 0.65
-        if (blob && blob.size > 716800) {
-          blob = await new Promise((res) => {
-            canvas?.toBlob((b) => res(b), 'image/jpeg', 0.65);
-          });
-        }
-
-        // Attempt 3: If somehow still > 700KB, downscale further to 1000px
-        if (blob && blob.size > 716800) {
-          const smallMax = 1000;
-          const smallW = Math.round((width * smallMax) / Math.max(width, height));
-          const smallH = Math.round((height * smallMax) / Math.max(width, height));
-          canvas.width = smallW;
-          canvas.height = smallH;
-          ctx.drawImage(source, 0, 0, smallW, smallH);
-          blob = await new Promise((res) => {
-            canvas?.toBlob((b) => res(b), 'image/jpeg', 0.60);
-          });
-        }
-
-        if (blob) {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            cleanup();
-            resolve((reader.result as string) || dataUrl);
-          };
-          reader.onerror = () => {
-            cleanup();
-            resolve(dataUrl);
-          };
-          reader.readAsDataURL(blob);
-        } else {
-          cleanup();
-          resolve(dataUrl);
-        }
+        if (imgBitmap) imgBitmap.close?.();
+        resolve(bestDataUrl);
       };
 
       if (imgBitmap) {
@@ -407,14 +331,10 @@ export async function ensureSafeImageSize(dataUrl?: string): Promise<string> {
         img.onload = async () => {
           await processSource(img, img.naturalWidth || img.width, img.naturalHeight || img.height);
         };
-        img.onerror = () => {
-          cleanup();
-          resolve(dataUrl);
-        };
+        img.onerror = () => resolve(dataUrl);
         img.src = dataUrl;
       }
     } catch {
-      cleanup();
       resolve(dataUrl);
     }
   });
@@ -443,10 +363,6 @@ export async function getAllReports(explicitUserId?: string): Promise<Report[]> 
         reports = reports.filter((r) => !r.userId || r.userId === currentUserId);
       }
       reports = reports.filter((r) => !r.isDeleted && (r.status as string) !== 'Deleted');
-      reports = reports.map((r) => ({
-        ...r,
-        reportType: r.reportType || 'photo_report',
-      }));
       reports.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       resolve(reports);
     };
@@ -469,13 +385,8 @@ export async function getReportById(id: string): Promise<Report | null> {
         resolve(null);
       } else if (report && currentUserId && report.userId && report.userId !== currentUserId) {
         resolve(null);
-      } else if (report) {
-        resolve({
-          ...report,
-          reportType: report.reportType || 'photo_report',
-        });
       } else {
-        resolve(null);
+        resolve(report || null);
       }
     };
     request.onerror = () => reject(request.error);
@@ -490,7 +401,6 @@ export async function saveReport(report: Report): Promise<void> {
   const currentUserId = auth.currentUser?.uid;
   const updated: Report = {
     ...report,
-    reportType: report.reportType || 'photo_report',
     userId: report.userId || currentUserId,
     updatedAt: new Date().toISOString(),
   };

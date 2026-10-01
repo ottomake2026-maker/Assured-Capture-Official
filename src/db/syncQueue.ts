@@ -84,7 +84,7 @@ export function computeEntityHash(entity: any, type: SyncQueueItem['entityType']
       const imgSig = r.reportImage
         ? `${r.reportImage.length}_${r.reportImage.slice(0, 30)}_${r.reportImage.slice(-30)}`
         : 'empty';
-      rawStr = `${r.id}|${r.jobReference}|${r.reportName}|${r.clientName}|${r.address}|${r.reportDate}|${r.status}|${r.inspectionDate}|${r.highestIssueNumberAssigned || 0}|${imgSig}`;
+      rawStr = `${r.id}|${r.jobReference}|${r.reportName}|${r.reportType || ''}|${r.clientName}|${r.address}|${r.reportDate}|${r.status}|${r.inspectionDate}|${r.highestIssueNumberAssigned || 0}|${imgSig}`;
     } else if (type === 'issue') {
       const i = entity as Issue;
       rawStr = `${i.id}|${i.reportId}|${i.issueNumber}|${i.issueName || ''}|${i.issueDescription || ''}|${i.notes || ''}|${(i as any).category || ''}`;
@@ -415,6 +415,7 @@ async function executeUpsertSync(
       userId: uid,
       jobReference: rep.jobReference || '',
       reportName: rep.reportName || '',
+      reportType: rep.reportType || 'Photo Report',
       clientName: rep.clientName || '',
       address: rep.address || '',
       reportDate: rep.reportDate || '',

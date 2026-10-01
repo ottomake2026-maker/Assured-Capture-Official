@@ -294,6 +294,7 @@ export async function syncLocalDataToFirestore(
       const safeImage = rep.reportImage ? await ensureSafeImageSize(rep.reportImage) : undefined;
       const updatedRep: Record<string, any> = {
         ...rep,
+        reportType: rep.reportType || 'Photo Report',
         userId,
         updatedAt: rep.updatedAt || new Date().toISOString(),
       };
@@ -558,12 +559,8 @@ export async function syncLocalDataToFirestore(
             const photoStore = tx.objectStore('photos');
 
             for (const rep of reportsToPut) {
-              const safeRep = {
-                ...rep,
-                reportType: rep.reportType || 'photo_report',
-              };
-              reportStore.put(safeRep);
-              setSyncedHash(`report_${safeRep.id}`, computeEntityHash(safeRep, 'report'));
+              reportStore.put(rep);
+              setSyncedHash(`report_${rep.id}`, computeEntityHash(rep, 'report'));
             }
             for (const iss of issuesToPut) {
               issueStore.put(iss);

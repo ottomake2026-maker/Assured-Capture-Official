@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
-import { Report, ReportStatus, UserProfile } from '../types';
+import { Report, UserProfile } from '../types';
 import { StatusBadge, ALL_REPORT_STATUSES } from './StatusBadge';
 import { AssuredLogo } from './AssuredLogo';
-import { Search, Calendar, MapPin, Building, FileText, Download, Check, AlertCircle, User as UserIcon, Plus, ChevronDown } from 'lucide-react';
+import { Search, Calendar, MapPin, Building, FileText, Download, Check, AlertCircle, User as UserIcon, Plus } from 'lucide-react';
 import { exportPhotoReportDocx } from '../utils/docxExport';
 import { exportPhotoReportPdf } from '../utils/pdfExport';
 import { ExportFormatDialog } from './ExportFormatDialog';
@@ -17,14 +17,11 @@ interface ReportsHomeScreenProps {
   onOpenProfile?: () => void;
   isLoading?: boolean;
   isGuest?: boolean;
+  onSignInRequest?: () => void;
   syncStatus?: { text: string; type: 'loading' | 'success' | 'error' } | null;
   isOnline?: boolean;
   pendingSyncCount?: number;
   isSyncing?: boolean;
-  searchTerm?: string;
-  onSearchTermChange?: (term: string) => void;
-  statusFilter?: ReportStatus | 'ALL';
-  onStatusFilterChange?: (status: ReportStatus | 'ALL') => void;
 }
 
 export const ReportsHomeScreen: React.FC<ReportsHomeScreenProps> = ({
@@ -35,24 +32,14 @@ export const ReportsHomeScreen: React.FC<ReportsHomeScreenProps> = ({
   onOpenProfile,
   isLoading = false,
   isGuest = false,
+  onSignInRequest,
   syncStatus = null,
   isOnline = true,
   pendingSyncCount = 0,
   isSyncing = false,
-  searchTerm: propSearchTerm,
-  onSearchTermChange,
-  statusFilter: propStatusFilter,
-  onStatusFilterChange,
 }) => {
-  const [internalSearchTerm, setInternalSearchTerm] = useState('');
-  const [internalStatusFilter, setInternalStatusFilter] = useState<ReportStatus | 'ALL'>('ALL');
-
-  const searchTerm = propSearchTerm !== undefined ? propSearchTerm : internalSearchTerm;
-  const setSearchTerm = onSearchTermChange || setInternalSearchTerm;
-
-  const selectedStatus = propStatusFilter !== undefined ? propStatusFilter : internalStatusFilter;
-  const setSelectedStatus = onStatusFilterChange || setInternalStatusFilter;
-
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('All');
   const [exportingReportId, setExportingReportId] = useState<string | null>(null);
   const [selectedReportForExport, setSelectedReportForExport] = useState<Report | null>(null);
   const [exportingFormat, setExportingFormat] = useState<'pdf' | 'docx' | null>(null);
@@ -102,28 +89,19 @@ export const ReportsHomeScreen: React.FC<ReportsHomeScreenProps> = ({
     }
   };
 
-  // Filter in-memory reports against both Status and Search Term (Job Reference, Report Name, Client Name)
+  // Filter search against Job Reference, Report Name, Client Name and Status filter
   const filteredReports = useMemo(() => {
-    let result = reports;
-
-    // 1. Filter by Status if not "ALL"
-    if (selectedStatus !== 'ALL') {
-      result = result.filter(r => r.status === selectedStatus);
-    }
-
-    // 2. Filter by Search query
     const term = searchTerm.trim().toLowerCase();
-    if (term) {
-      result = result.filter(r => {
-        const matchJob = (r.jobReference || '').toLowerCase().includes(term);
-        const matchName = (r.reportName || '').toLowerCase().includes(term);
-        const matchClient = (r.clientName || '').toLowerCase().includes(term);
-        return matchJob || matchName || matchClient;
-      });
-    }
-
-    return result;
-  }, [reports, searchTerm, selectedStatus]);
+    return reports.filter(r => {
+      const matchSearch =
+        !term ||
+        (r.jobReference || '').toLowerCase().includes(term) ||
+        (r.reportName || '').toLowerCase().includes(term) ||
+        (r.clientName || '').toLowerCase().includes(term);
+      const matchStatus = statusFilter === 'All' || r.status === statusFilter;
+      return matchSearch && matchStatus;
+    });
+  }, [reports, searchTerm, statusFilter]);
 
   return (
     <div className="w-full">
@@ -192,9 +170,19 @@ export const ReportsHomeScreen: React.FC<ReportsHomeScreenProps> = ({
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 rounded-full bg-[#E06A55] shrink-0" />
               <span className="leading-snug">
-                <strong className="font-bold text-[#0E1E2B]">Guest Mode:</strong> Reports are stored on this device.
+                <strong className="font-bold text-[#0E1E2B]">Guest Mode:</strong> Reports are stored only on this device and may not be recoverable if device data is cleared.
               </span>
             </div>
+            {onSignInRequest && (
+              <button
+                type="button"
+                id="btn_guest_banner_signin"
+                onClick={onSignInRequest}
+                className="font-bold text-[#628EF7] hover:text-[#4E7AF2] underline underline-offset-2 shrink-0 cursor-pointer"
+              >
+                Sign in to link account
+              </button>
+            )}
           </div>
         )}
 
@@ -254,15 +242,15 @@ export const ReportsHomeScreen: React.FC<ReportsHomeScreenProps> = ({
           </div>
         )}
 
-        {/* 5. Search & Status Filter: Responsive arrangement (side-by-side on desktop, stacked on mobile) */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
-          {/* Search Input */}
+        {/* 5. Search & Status Filter: Search input and Status dropdown with All as default */}
+        <div className="flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-[#0E1E2B]/40">
               <Search className="w-4.5 h-4.5 stroke-[2]" />
             </div>
             <input
               type="text"
+              id="reports_search_input"
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               placeholder="Search reports by reference, name..."
@@ -271,34 +259,30 @@ export const ReportsHomeScreen: React.FC<ReportsHomeScreenProps> = ({
             {searchTerm && (
               <button
                 type="button"
+                id="btn_clear_search"
                 onClick={() => setSearchTerm('')}
                 className="absolute inset-y-0 right-0 pr-4 flex items-center text-xs font-semibold text-[#0E1E2B]/50 hover:text-[#0E1E2B] cursor-pointer min-h-[44px] touch-manipulation"
-                aria-label="Clear search"
               >
                 Clear
               </button>
             )}
           </div>
 
-          {/* Status Filter Control */}
-          <div className="relative w-full sm:w-44 md:w-48 shrink-0">
+          <div className="sm:w-48 shrink-0">
             <select
-              id="report_status_filter"
+              id="reports_status_filter"
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              className="w-full px-3.5 py-3 bg-white border border-[#0E1E2B]/15 rounded-lg text-sm sm:text-base font-medium text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[48px] cursor-pointer"
               aria-label="Filter reports by status"
-              value={selectedStatus}
-              onChange={e => setSelectedStatus(e.target.value as ReportStatus | 'ALL')}
-              className="w-full appearance-none bg-white border border-[#0E1E2B]/15 rounded-lg py-3 pl-3.5 pr-9 text-sm text-[#0E1E2B] font-medium focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[48px] cursor-pointer touch-manipulation shadow-2xs"
             >
-              <option value="ALL">All</option>
-              {ALL_REPORT_STATUSES.map(status => (
-                <option key={status} value={status}>
-                  {status}
+              <option value="All">All</option>
+              {ALL_REPORT_STATUSES.map(st => (
+                <option key={st} value={st}>
+                  {st}
                 </option>
               ))}
             </select>
-            <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none text-[#0E1E2B]/50">
-              <ChevronDown className="w-4 h-4 stroke-[2]" />
-            </div>
           </div>
         </div>
 
@@ -374,35 +358,22 @@ export const ReportsHomeScreen: React.FC<ReportsHomeScreenProps> = ({
             <div className="w-12 h-12 rounded-xl bg-[#B2E5F6]/40 text-[#0E1E2B] flex items-center justify-center mx-auto mb-3 border border-[#B2E5F6]">
               <FileText className="w-6 h-6 stroke-[1.8]" />
             </div>
-            <h2 className="text-base sm:text-lg font-sans font-bold text-[#0E1E2B] mb-1.5 tracking-tight uppercase">
-              {searchTerm || selectedStatus !== 'ALL' ? 'NO REPORTS FOUND' : 'No reports yet'}
+            <h2 className="text-base sm:text-lg font-sans font-bold text-[#0E1E2B] mb-1.5 tracking-tight">
+              {searchTerm || statusFilter !== 'All' ? 'No matching reports' : 'No reports yet'}
             </h2>
             <p className="text-xs text-[#0E1E2B]/65 mb-5 max-w-sm mx-auto font-normal">
-              {searchTerm || selectedStatus !== 'ALL'
-                ? 'Try changing your search or status filter.'
+              {searchTerm || statusFilter !== 'All'
+                ? `No reports matched the current filter. Try selecting "All" or clearing the search.`
                 : 'Create your first field inspection photo report to get started.'}
             </p>
-            {searchTerm || selectedStatus !== 'ALL' ? (
-              <button
-                type="button"
-                onClick={() => {
-                  setSearchTerm('');
-                  setSelectedStatus('ALL');
-                }}
-                className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white hover:bg-[#F4F6F8] active:bg-[#E9ECF0] text-[#0E1E2B] border border-[#0E1E2B]/20 hover:border-[#0E1E2B] font-sans font-bold text-xs tracking-wider uppercase rounded-lg min-h-[44px] touch-manipulation cursor-pointer transition-colors"
-              >
-                Clear Filters
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={onCreateNewReport}
-                className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-[#628EF7] hover:bg-[#4E7AF2] active:bg-[#3E69E0] text-white font-sans font-bold text-xs tracking-wider uppercase rounded-lg min-h-[48px] touch-manipulation active:scale-[0.98] cursor-pointer shadow-sm"
-              >
-                <Plus className="w-4 h-4 stroke-[2.5]" />
-                <span>NEW REPORT</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={onCreateNewReport}
+              className="inline-flex items-center justify-center gap-1.5 px-5 py-2.5 bg-[#628EF7] hover:bg-[#4E7AF2] active:bg-[#3E69E0] text-white font-sans font-bold text-xs tracking-wider uppercase rounded-lg min-h-[48px] touch-manipulation active:scale-[0.98] cursor-pointer shadow-sm"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>NEW REPORT</span>
+            </button>
           </div>
         ) : (
           /* 6. RECENT INSPECTIONS Header with count */

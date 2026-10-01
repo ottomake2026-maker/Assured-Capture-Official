@@ -5,28 +5,6 @@ export type ReportStatus =
   | 'Completed'
   | 'Sent to Client';
 
-export type ReportType =
-  | 'photo_report'
-  | 'draft_photo_report'
-  | 'report'
-  | 'draft_report'
-  | 'expert_report';
-
-export interface ReportTypeOption {
-  value: ReportType;
-  label: string;
-  available: boolean;
-  comingSoonText?: string;
-}
-
-export const REPORT_TYPE_OPTIONS: ReportTypeOption[] = [
-  { value: 'photo_report', label: 'Photo Report', available: true },
-  { value: 'draft_photo_report', label: 'Draft Photo Report', available: false, comingSoonText: 'Coming soon' },
-  { value: 'report', label: 'Report', available: false, comingSoonText: 'Coming soon' },
-  { value: 'draft_report', label: 'Draft Report', available: false, comingSoonText: 'Coming soon' },
-  { value: 'expert_report', label: 'Expert Report', available: false, comingSoonText: 'Coming soon' },
-];
-
 export interface InspectionDateHistoryRecord {
   date: string;
   changedAt: string;
@@ -37,7 +15,7 @@ export interface Report {
   userId?: string;
   jobReference: string;
   reportName: string;
-  reportType?: ReportType;
+  reportType?: string;
   clientName: string;
   address: string;
   reportDate: string; // YYYY-MM-DD
