@@ -717,11 +717,7 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
       drawTextBoxOnCanvas(mergeCtx, box, naturalWidth, naturalHeight, displayedWidth);
     });
 
-    const result = mergeCanvas.toDataURL('image/jpeg', 0.92);
-    // Explicitly release backing canvas buffer to avoid memory accumulation on iOS WebKit
-    mergeCanvas.width = 0;
-    mergeCanvas.height = 0;
-    return result;
+    return mergeCanvas.toDataURL('image/jpeg', 0.92);
   };
 
   const handleUndo = () => {
@@ -1277,12 +1273,11 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 onScroll={syncDescriptionScroll}
-                placeholder="Record detailed defect observations, physical dimensions, material degradation, crack orientation, water ingress, or remediation requirements..."
                 rows={6}
                 className={`w-full text-sm sm:text-base font-normal px-3.5 py-3 rounded-lg border focus:ring-2 outline-none transition-colors min-h-[150px] leading-relaxed break-words whitespace-pre-wrap relative z-[1] selection:bg-[#628EF7]/30 ${
                   isDescOverLimit
                     ? 'bg-transparent text-transparent caret-[#0E1E2B] border-red-300 focus:border-red-500 focus:ring-red-500/20'
-                    : 'bg-white text-[#0E1E2B] border-[#0E1E2B]/20 focus:border-[#628EF7] focus:ring-[#628EF7]/20 placeholder:text-[#0E1E2B]/40'
+                    : 'bg-white text-[#0E1E2B] border-[#0E1E2B]/20 focus:border-[#628EF7] focus:ring-[#628EF7]/20'
                 }`}
               />
             </div>
@@ -1301,9 +1296,8 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
             <textarea
               value={internalNotes}
               onChange={e => setInternalNotes(e.target.value)}
-              placeholder="Add internal notes for this photo…"
               rows={3}
-              className="w-full text-sm font-normal px-3.5 py-2.5 bg-[#F8FAFC] border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] placeholder:text-[#0E1E2B]/40 focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all leading-relaxed"
+              className="w-full text-sm font-normal px-3.5 py-2.5 bg-[#F8FAFC] border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all leading-relaxed"
             />
           </div>
 

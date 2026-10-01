@@ -508,8 +508,7 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
                     id="input_job_reference_number"
                     value={jobNumber}
                     onChange={handleJobNumberChange}
-                    placeholder="123"
-                    className="w-full font-mono font-bold text-sm sm:text-base px-3 sm:px-3.5 py-2.5 sm:py-3 bg-transparent text-[#0E1E2B] outline-none placeholder:text-[#0E1E2B]/35 placeholder:font-normal"
+                    className="w-full font-mono font-bold text-sm sm:text-base px-3 sm:px-3.5 py-2.5 sm:py-3 bg-transparent text-[#0E1E2B] outline-none"
                   />
                 </div>
               ) : (
@@ -518,7 +517,6 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
                   id="input_job_reference"
                   value={jobReference}
                   onChange={e => setJobReference(e.target.value)}
-                  placeholder="Job Reference"
                   className="w-full font-mono font-bold text-sm sm:text-base px-3.5 py-2.5 sm:py-3 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[44px] sm:min-h-[48px]"
                 />
               )}
@@ -564,7 +562,6 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
                 type="text"
                 value={reportName}
                 onChange={e => setReportName(e.target.value)}
-                placeholder="e.g. Roof & Gutter Structural Inspection"
                 className="w-full text-sm sm:text-base font-normal px-3.5 py-2.5 sm:py-3 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[44px] sm:min-h-[48px]"
               />
             </div>
@@ -577,7 +574,6 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
                 type="text"
                 value={clientName}
                 onChange={e => setClientName(e.target.value)}
-                placeholder="e.g. Acme Commercial Properties Ltd"
                 className="w-full text-sm sm:text-base font-normal px-3.5 py-2.5 sm:py-3 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[44px] sm:min-h-[48px]"
               />
             </div>
@@ -608,7 +604,6 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
                   type="text"
                   value={address}
                   onChange={e => setAddress(e.target.value)}
-                  placeholder="e.g. 144 High Street, Sector 4"
                   className="w-full text-sm sm:text-base font-normal pl-3.5 pr-12 py-2.5 sm:py-3 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[44px] sm:min-h-[48px]"
                 />
                 <button

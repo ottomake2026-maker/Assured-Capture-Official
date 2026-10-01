@@ -21,9 +21,9 @@ const FOOTER_Y = 760;
 
 // Photo Grid dimensions (2 columns)
 const PHOTO_GAP = 16;
-const ROW_GAP = 16;
+const ROW_GAP = 14;
 const PHOTO_WIDTH = (CONTENT_WIDTH - PHOTO_GAP) / 2; // 262 pt
-const PHOTO_HEIGHT = 158; // ~1.65 aspect ratio matching DOCX
+const PHOTO_HEIGHT = 154; // ~1.7 aspect ratio matching DOCX layout
 
 // High-DPI Canvas render target for crisp photos
 const TARGET_CANVAS_WIDTH = 704;
@@ -274,38 +274,65 @@ export async function buildPhotoReportPdf(
     format: 'letter', // 612 x 792 pt
   });
 
-  // Helper to render prominent semi-transparent diagonal status watermark IN FRONT of page content
-  const rawStatus = (report.status || 'Draft').toString();
+  // Helper to render semi-transparent diagonal status watermark BEHIND page content
+  const rawStatus = (report.status || 'Draft').toString().trim();
+  const isCompleted = rawStatus.toLowerCase() === 'completed';
+  const showWatermark = !isCompleted;
   const statusWatermarkText = rawStatus.replace(/_/g, ' ').toUpperCase();
 
   const renderStatusWatermark = () => {
+    if (!showWatermark) return;
     doc.saveGraphicsState();
     if (typeof (doc as any).setGState === 'function' && (doc as any).GState) {
-      doc.setGState(new (doc as any).GState({ opacity: 0.13 }));
+      doc.setGState(new (doc as any).GState({ opacity: 0.35 }));
     }
     doc.setFont('helvetica', 'bold');
 
-    // Calculate dynamic font size so watermark spans approximately 68-72% of page width
-    let fontSize = 100;
+    // Dynamically calculate exact center coordinates from the active page's geometry
+    const pageWidth = doc.internal.pageSize.getWidth() || PAGE_WIDTH;
+    const pageHeight = doc.internal.pageSize.getHeight() || PAGE_HEIGHT;
+    const centerX = pageWidth / 2;
+    const centerY = pageHeight / 2;
+
+    // Calculate dynamic font size so watermark spans prominently across the page (~80-85% width)
+    let fontSize = 115;
     doc.setFontSize(fontSize);
-    const measuredWidth = doc.getTextWidth(statusWatermarkText);
-    const targetWidth = PAGE_WIDTH * 0.70; // ~428 pt (~70% of 612 pt page width)
+    let measuredWidth = doc.getTextWidth(statusWatermarkText);
+    const targetWidth = pageWidth * 0.82;
 
     if (measuredWidth > 0) {
-      fontSize = Math.min(115, Math.max(48, Math.round(fontSize * (targetWidth / measuredWidth))));
+      fontSize = Math.min(145, Math.max(56, Math.round(fontSize * (targetWidth / measuredWidth))));
       doc.setFontSize(fontSize);
+      measuredWidth = doc.getTextWidth(statusWatermarkText);
     }
 
     doc.setTextColor(100, 116, 139); // Clean slate gray/blue tone matching Assured styling
 
-    // Exact geometric center of the page with vertical and horizontal centering
-    const centerX = PAGE_WIDTH / 2;
-    const centerY = PAGE_HEIGHT / 2;
+    // 1. Calculate actual rendered glyph bounding box in local text coordinate space
+    const textWidth = measuredWidth;
+    const capHeight = fontSize * 0.70; // Uppercase cap-height for Helvetica Bold
 
-    doc.text(statusWatermarkText, centerX, centerY, {
-      angle: -35,
-      align: 'center',
-      baseline: 'middle',
+    // 2. Unrotated center of the glyph bounding box in local coordinates
+    const localCenterX = textWidth / 2;
+    const localCenterY = capHeight / 2;
+
+    // 3. Rotation angle: ~45° upper-left to lower-right diagonal
+    const angleDeg = -45;
+    const angleRad = (angleDeg * Math.PI) / 180;
+    const cosA = Math.cos(angleRad);
+    const sinA = Math.sin(angleRad);
+
+    // 4. Vector displacement from text origin to the center of the rotated bounding box
+    const deltaX = localCenterX * cosA - localCenterY * sinA;
+    const deltaY = localCenterX * sinA + localCenterY * cosA;
+
+    // 5. Final text insertion origin (X, Y) in jsPDF coordinate space so the rotated visual center is at (centerX, centerY)
+    const originX = centerX - deltaX;
+    const originY = centerY + deltaY;
+
+    // Render rotated watermark with exact bounding box center at 50% / 50% of the page
+    doc.text(statusWatermarkText, originX, originY, {
+      angle: angleDeg,
     });
     doc.restoreGraphicsState();
   };
@@ -406,15 +433,15 @@ export async function buildPhotoReportPdf(
       : [];
 
     // Exact height calculation:
-    // - Photo image: PHOTO_HEIGHT (158 pt)
-    // - Top gap to issue line: 13 pt
+    // - Photo image: PHOTO_HEIGHT (154 pt)
+    // - Top gap to issue line: 11 pt
     // - Issue title block height: Math.max(1, titleLines.length) * 9.5 pt
-    // - Gap between issue title and photo line: 4.5 pt
+    // - Gap between issue title and photo line: 4 pt
     // - Photo description lines: (captionLines.length - 1) * 9.5 pt (first line shares baseline with PHOTO badge)
-    // - Bottom padding below text: 6 pt
+    // - Bottom padding below text: 5 pt
     const titleBlockHeight = Math.max(1, titleLines.length) * 9.5;
     const captionBlockHeight = Math.max(0, captionLines.length - 1) * 9.5;
-    const height = PHOTO_HEIGHT + 13 + titleBlockHeight + 4.5 + captionBlockHeight + 6;
+    const height = PHOTO_HEIGHT + 11 + titleBlockHeight + 4 + captionBlockHeight + 5;
 
     return {
       item,
@@ -442,7 +469,7 @@ export async function buildPhotoReportPdf(
     doc.rect(x, y, PHOTO_WIDTH, PHOTO_HEIGHT);
 
     // 2. Issue Line
-    const issueY = y + PHOTO_HEIGHT + 13;
+    const issueY = y + PHOTO_HEIGHT + 11;
     drawBadge(`ISSUE ${item.issueNumber}`, x, issueY, COLOR_PURPLE, '#FFFFFF', issueBadgeWidth);
 
     doc.setFont('helvetica', 'bold');
@@ -452,9 +479,9 @@ export async function buildPhotoReportPdf(
       doc.text(titleLines[i], x + issueBadgeWidth + 6, issueY + i * 9.5);
     }
 
-    // 3. Photo Line & Full Description (renders all lines with zero truncation)
+    // 3. Photo Line & Full Description (renders directly below photo and issue line)
     const titleBlockHeight = Math.max(1, titleLines.length) * 9.5;
-    const photoLineY = issueY + titleBlockHeight + 4.5;
+    const photoLineY = issueY + titleBlockHeight + 4;
     drawBadge(`PHOTO ${item.photoNumber}`, x, photoLineY, COLOR_TEAL, '#FFFFFF', photoBadgeWidth);
 
     doc.setFont('helvetica', 'normal');
@@ -568,12 +595,15 @@ export async function buildPhotoReportPdf(
   doc.setTextColor(COLOR_SLATE);
   doc.text(consultantName, MARGIN, curY);
 
-  // Space after Consultant
-  curY += 34;
+  // Space after Consultant & Date of Report (2x breathing room before first photo row)
+  curY += 60;
 
-  const page1StartY = Math.max(curY, 195);
-  const subsequentPageStartY = MARGIN + 10; // 46 pt
+  const page1StartY = Math.max(curY, 226);
+  const subsequentPageStartY = MARGIN; // 36 pt
   const MAX_CONTENT_Y = FOOTER_Y - 24; // 736 pt - safe buffer above footer divider at 748 pt
+
+  const PAGE_1_MAX_ROWS = 2; // Maximum 4 photos on Page 1 (2 rows × 2 cols)
+  const SUBSEQUENT_PAGE_MAX_ROWS = 3; // Maximum 6 photos per subsequent page (3 rows × 2 cols)
 
   if (rows.length === 0) {
     doc.setFont('helvetica', 'italic');
@@ -584,18 +614,22 @@ export async function buildPhotoReportPdf(
     });
   } else {
     let currentY = page1StartY;
+    let pageRowCount = 0;
+    let maxRowsOnCurrentPage = PAGE_1_MAX_ROWS;
 
     for (let r = 0; r < rows.length; r++) {
       const row = rows[r];
 
-      // Check if this row cannot fit safely in the remaining space of current page
-      const isStartOfPage = (doc.getNumberOfPages() === 1 && currentY === page1StartY) ||
-                            (doc.getNumberOfPages() > 1 && currentY === subsequentPageStartY);
+      // Check if we need to advance to the next page:
+      // 1. Current page has reached its maximum rows (2 rows for Page 1, 3 rows for Page 2+)
+      // 2. OR the current row would exceed MAX_CONTENT_Y
+      const isStartOfPage = (pageRowCount === 0);
 
-      if (!isStartOfPage && currentY + row.height > MAX_CONTENT_Y) {
-        // Move the entire photo block/row to the next page without splitting
+      if (!isStartOfPage && (pageRowCount >= maxRowsOnCurrentPage || currentY + row.height > MAX_CONTENT_Y)) {
         doc.addPage('letter', 'portrait');
         currentY = subsequentPageStartY;
+        pageRowCount = 0;
+        maxRowsOnCurrentPage = SUBSEQUENT_PAGE_MAX_ROWS;
       }
 
       // Render left card
@@ -606,12 +640,12 @@ export async function buildPhotoReportPdf(
         drawMeasuredPhotoCard(row.right, MARGIN + PHOTO_WIDTH + PHOTO_GAP, currentY);
       }
 
-      // Next row begins only after the tallest block in the current row has finished
+      pageRowCount++;
       currentY += row.height + ROW_GAP;
     }
   }
 
-  // Render status watermark in front of report content & footers across all generated pages
+  // Render status watermark on top of photos and report content, followed by footers across all generated pages
   const totalPages = doc.getNumberOfPages();
   for (let p = 1; p <= totalPages; p++) {
     doc.setPage(p);
