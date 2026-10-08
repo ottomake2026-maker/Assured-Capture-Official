@@ -514,7 +514,7 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
   const failedUploads = uploadTasks.filter(t => t.state === 'failed');
 
   return (
-    <div className="w-full max-w-3xl lg:max-w-4xl mx-auto px-4 py-4 sm:px-6 sm:py-6 space-y-6 sm:space-y-8">
+    <div className="w-full max-w-3xl lg:max-w-4xl mx-auto px-4 py-4 sm:px-6 sm:py-6 pb-28 sm:pb-32 space-y-6 sm:space-y-8">
       {/* Navigation Header */}
       <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#0E1E2B]/10">
         <button
@@ -723,11 +723,14 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
 
         {/* Photographic Evidence Gallery: Compact square thumbnails focused on visual identification */}
         {localPhotos.length === 0 ? (
-          <div className="bg-white rounded-xl border border-[#0E1E2B]/15 p-8 text-center">
-            <div className="w-12 h-12 rounded-full bg-[#F4F6F8] text-[#0E1E2B]/40 flex items-center justify-center mx-auto mb-2.5 border border-[#0E1E2B]/10">
-              <Camera className="w-5 h-5 stroke-[1.8]" />
+          <div className="bg-white rounded-xl border border-[#0E1E2B]/15 p-8 sm:p-10 text-center space-y-3 shadow-2xs">
+            <div className="w-12 h-12 rounded-xl bg-[#F4F6F8] text-[#0E1E2B]/50 flex items-center justify-center mx-auto mb-1 border border-[#0E1E2B]/15">
+              <Camera className="w-6 h-6 stroke-[1.8]" />
             </div>
-            <p className="text-sm font-bold text-[#0E1E2B]">No photographic evidence captured</p>
+            <p className="text-base font-bold text-[#0E1E2B]">No photographic evidence captured yet</p>
+            <p className="text-xs text-[#0E1E2B]/65 max-w-sm mx-auto">
+              Use "Take Field Photo" or "Choose From Gallery" above to attach inspection photos to this defect issue.
+            </p>
           </div>
         ) : (
           <div
@@ -740,6 +743,7 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
               const photoNum = idx + 1;
               const isDragged = draggedPhotoIndex === idx;
               const isOver = dragOverPhotoIndex === idx && draggedPhotoIndex !== null && draggedPhotoIndex !== idx;
+              const isExcluded = photo.includeInReport === false;
 
               return (
                 <div
@@ -755,7 +759,7 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
                   tabIndex={0}
                   onClick={() => handleOpenPhotoItem(photo.id)}
                   role="button"
-                  aria-label={`Photo ${photoNum}, tap to open details`}
+                  aria-label={`Photo ${photoNum}${isExcluded ? ' (Excluded from report)' : ''}, tap to open details`}
                   className={`group relative aspect-square bg-[#0E1E2B]/5 rounded-xl border border-[#0E1E2B]/15 overflow-hidden cursor-pointer shadow-2xs transition-all focus:outline-none focus:ring-2 focus:ring-[#628EF7] ${
                     isDragged
                       ? 'opacity-35 scale-95 border-2 border-dashed border-[#628EF7]'
@@ -768,7 +772,9 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
                   <img
                     src={photo.imageFile}
                     alt={photo.description || `Photo ${photoNum}`}
-                    className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105 pointer-events-none"
+                    className={`w-full h-full object-cover transition-transform duration-200 group-hover:scale-105 pointer-events-none ${
+                      isExcluded ? 'grayscale-40 opacity-80' : ''
+                    }`}
                     loading="lazy"
                   />
 
@@ -776,11 +782,20 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
                   <div className="absolute inset-x-0 top-0 h-10 bg-gradient-to-b from-[#0E1E2B]/60 via-[#0E1E2B]/20 to-transparent pointer-events-none" />
 
                   {/* Photo sequence badge: subtle, clear identification of order */}
-                  <div className="absolute top-2 left-2 z-10 pointer-events-none">
+                  <div className="absolute top-2 left-2 z-10 pointer-events-none flex items-center gap-1">
                     <span className="inline-flex items-center px-1.5 sm:px-2 py-0.5 rounded-md bg-[#0E1E2B]/80 text-white font-mono font-bold text-[10px] sm:text-[11px] uppercase tracking-wider backdrop-blur-xs shadow-xs border border-white/15">
                       Photo {photoNum}
                     </span>
                   </div>
+
+                  {/* Excluded tag badge if photo is excluded from the photo report */}
+                  {isExcluded && (
+                    <div className="absolute bottom-2 left-2 z-10 pointer-events-none">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-rose-950/80 text-rose-200 font-mono font-semibold text-[9px] uppercase tracking-wider backdrop-blur-xs border border-rose-500/30">
+                        Excluded
+                      </span>
+                    </div>
+                  )}
 
                   {/* Drag handle: unobtrusive, clearly draggable on mouse and touch */}
                   <div
@@ -798,44 +813,6 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
           </div>
         )}
       </section>
-
-      {/* SECTION 3: PRIMARY ACTION - SAVE ISSUE */}
-      <div className="pt-2 space-y-2">
-        <button
-          type="button"
-          onClick={handleSaveIssueInfo}
-          disabled={isSaving}
-          className={`w-full py-3.5 px-6 rounded-lg font-bold text-xs uppercase tracking-wider min-h-[48px] sm:min-h-[52px] flex items-center justify-center gap-2.5 transition-colors touch-manipulation active:scale-[0.99] cursor-pointer shadow-sm ${
-            saveSuccess
-              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-              : 'bg-[#628EF7] hover:bg-[#4E7AF2] active:bg-[#3E69E0] text-white focus:ring-4 focus:ring-[#628EF7]/25'
-          } ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
-        >
-          {isSaving ? (
-            <>
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span>Saving Issue...</span>
-            </>
-          ) : saveSuccess ? (
-            <>
-              <Check className="w-4 h-4 stroke-[2.5]" />
-              <span>Issue Saved</span>
-            </>
-          ) : (
-            <>
-              <Save className="w-4 h-4 stroke-[2.2]" />
-              <span>SAVE ISSUE</span>
-            </>
-          )}
-        </button>
-
-        {saveError && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-900 text-xs font-semibold flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{saveError}</span>
-          </div>
-        )}
-      </div>
 
       {/* DESTRUCTIVE ACTION: Clearly separated below with lower visual emphasis */}
       <div className="pt-6 sm:pt-8 border-t border-[#0E1E2B]/10">
@@ -867,6 +844,50 @@ export const IssueDetailScreen: React.FC<IssueDetailScreenProps> = ({
         onConfirm={handleConfirmDelete}
         onCancel={() => setIsDeleteDialogOpen(false)}
       />
+
+      {/* FIXED BOTTOM PRIMARY ACTION: SAVE ISSUE */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-[#0E1E2B]/15 p-3 sm:p-4 shadow-lg"
+        style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+      >
+        <div className="w-full max-w-3xl lg:max-w-4xl mx-auto flex flex-col gap-2">
+          {saveError && (
+            <div className="p-2.5 sm:p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-900 text-xs font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{saveError}</span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            id="btn_save_issue"
+            onClick={handleSaveIssueInfo}
+            disabled={isSaving}
+            className={`w-full py-3.5 px-5 rounded-lg font-bold text-xs sm:text-sm uppercase tracking-wider min-h-[52px] flex items-center justify-center gap-2 transition-all touch-manipulation cursor-pointer active:scale-[0.99] focus:outline-none focus:ring-4 focus:ring-[#628EF7]/25 shadow-sm ${
+              saveSuccess
+                ? 'bg-emerald-600 text-white'
+                : 'bg-[#628EF7] hover:bg-[#4E7AF2] active:bg-[#3E69E0] text-white'
+            } ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
+          >
+            {isSaving ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Saving Issue...</span>
+              </>
+            ) : saveSuccess ? (
+              <>
+                <Check className="w-4 h-4 stroke-[2.5]" />
+                <span>Issue Saved</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 stroke-[2.2]" />
+                <span>Save Issue</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

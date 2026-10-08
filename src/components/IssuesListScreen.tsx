@@ -256,7 +256,7 @@ export const IssuesListScreen: React.FC<IssuesListScreenProps> = ({
   };
 
   return (
-    <div className="w-full max-w-3xl lg:max-w-4xl mx-auto px-4 py-4 sm:px-6 sm:py-6 space-y-6 sm:space-y-7">
+    <div className="w-full max-w-3xl lg:max-w-4xl mx-auto px-4 py-4 sm:px-6 sm:py-6 pb-28 sm:pb-32 space-y-6 sm:space-y-7">
       {/* 1. Top Navigation Bar: ← Report Details */}
       <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#0E1E2B]/10">
         <button
@@ -302,9 +302,15 @@ export const IssuesListScreen: React.FC<IssuesListScreenProps> = ({
       {/* 3. Inspection Register: Draggable, Disciplined Register List */}
       <section aria-label="Inspection Issues Register" className="space-y-2">
         {localIssues.length === 0 ? (
-          <div className="bg-white rounded-xl border border-[#0E1E2B]/15 p-6 sm:p-8 text-center space-y-2">
+          <div className="bg-white rounded-xl border border-[#0E1E2B]/15 p-8 sm:p-10 text-center space-y-3 shadow-2xs">
+            <div className="w-12 h-12 rounded-xl bg-[#EDF8FA] border border-[#94D6E7] text-[#0E7490] flex items-center justify-center mx-auto mb-1">
+              <Plus className="w-6 h-6 stroke-[2.2]" />
+            </div>
             <p className="text-base font-bold text-[#0E1E2B]">
-              No issues recorded
+              No issues recorded yet
+            </p>
+            <p className="text-xs text-[#0E1E2B]/65 max-w-sm mx-auto">
+              Add your first inspection issue below to record defects, observations, and attach photographic evidence.
             </p>
           </div>
         ) : (
@@ -393,53 +399,65 @@ export const IssuesListScreen: React.FC<IssuesListScreenProps> = ({
         )}
       </section>
 
-      {/* 4. Actions: [ + Add Issue ] then [ Save Issues ] */}
-      <div className="space-y-3 pt-1">
-        <button
-          type="button"
-          onClick={onAddIssue}
-          className="w-full py-3.5 px-6 bg-white hover:bg-[#F4F6F8] active:bg-[#E5E8EB] text-[#0E1E2B] border border-[#0E1E2B]/20 font-bold text-sm tracking-wider uppercase rounded-lg flex items-center justify-center gap-2 transition-colors touch-manipulation min-h-[48px] sm:min-h-[52px] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-[#628EF7]/30 cursor-pointer shadow-2xs"
-          aria-label="Add new issue"
-        >
-          <Plus className="w-4.5 h-4.5 stroke-[2.4]" />
-          <span>Add Issue</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={handleSaveIssuesClick}
-          disabled={isSaving}
-          className="w-full py-3.5 px-6 bg-[#628EF7] hover:bg-[#4E7AF2] active:bg-[#3E69E0] disabled:bg-[#628EF7]/70 text-white font-bold text-sm tracking-wider uppercase rounded-lg flex items-center justify-center gap-2 transition-colors touch-manipulation min-h-[48px] sm:min-h-[52px] active:scale-[0.99] focus:outline-none focus:ring-4 focus:ring-[#628EF7]/25 cursor-pointer shadow-xs"
-          aria-label="Save issues"
-        >
-          {isSaving ? (
-            <span>Saving Issues...</span>
-          ) : (
-            <>
-              <Save className="w-4.5 h-4.5 stroke-[2.2]" />
-              <span>Save Issues</span>
-            </>
-          )}
-        </button>
-
-        {saveError && (
-          <div
-            role="alert"
-            className="p-3 bg-red-50 border border-red-200/80 rounded-lg text-red-900 text-xs font-semibold flex items-center justify-between gap-2 animate-fadeIn"
+      {/* 4. Secondary Action: Save Issues register to report */}
+      {onSaveIssues && (
+        <div className="pt-1">
+          <button
+            type="button"
+            id="btn_save_issues_list"
+            onClick={handleSaveIssuesClick}
+            disabled={isSaving}
+            className="w-full py-3 px-5 bg-white hover:bg-[#F4F6F8] active:bg-[#E5E8EB] disabled:bg-[#F4F6F8] text-[#0E1E2B] border border-[#0E1E2B]/20 font-bold text-xs uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 transition-colors touch-manipulation min-h-[44px] active:scale-[0.99] focus:outline-none focus:ring-2 focus:ring-[#628EF7]/30 cursor-pointer shadow-2xs"
+            aria-label="Save issues and return"
           >
-            <div className="flex items-center gap-2">
-              <AlertCircle className="w-4 h-4 text-red-600 stroke-[2.2] shrink-0" />
-              <span>{saveError}</span>
-            </div>
-            <button
-              type="button"
-              onClick={handleSaveIssuesClick}
-              className="text-red-700 underline hover:text-red-900 text-xs font-bold shrink-0 cursor-pointer"
+            {isSaving ? (
+              <span>Saving Issues...</span>
+            ) : (
+              <>
+                <Save className="w-4 h-4 stroke-[2.2]" />
+                <span>Save Issues & Return</span>
+              </>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* FIXED BOTTOM PRIMARY ACTION: ADD ISSUE */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-[#0E1E2B]/15 p-3 sm:p-4 shadow-lg"
+        style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+      >
+        <div className="w-full max-w-3xl lg:max-w-4xl mx-auto flex flex-col gap-2">
+          {saveError && (
+            <div
+              role="alert"
+              className="p-2.5 sm:p-3 bg-red-50 border border-red-200/80 rounded-lg text-red-900 text-xs font-semibold flex items-center justify-between gap-2 animate-fadeIn"
             >
-              Retry
-            </button>
-          </div>
-        )}
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-600 stroke-[2.2] shrink-0" />
+                <span>{saveError}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleSaveIssuesClick}
+                className="text-red-700 underline hover:text-red-900 text-xs font-bold shrink-0 cursor-pointer"
+              >
+                Retry
+              </button>
+            </div>
+          )}
+
+          <button
+            type="button"
+            id="btn_add_issue"
+            onClick={onAddIssue}
+            className="w-full py-3.5 px-5 bg-[#628EF7] hover:bg-[#4E7AF2] active:bg-[#3E69E0] text-white font-bold text-xs sm:text-sm uppercase tracking-wider rounded-lg flex items-center justify-center gap-2 transition-all touch-manipulation min-h-[52px] active:scale-[0.99] focus:outline-none focus:ring-4 focus:ring-[#628EF7]/25 cursor-pointer shadow-sm"
+            aria-label="Add new issue"
+          >
+            <Plus className="w-4.5 h-4.5 stroke-[2.5]" />
+            <span>Add Issue</span>
+          </button>
+        </div>
       </div>
     </div>
   );

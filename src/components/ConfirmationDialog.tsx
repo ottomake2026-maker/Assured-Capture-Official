@@ -81,7 +81,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
             {isLoading ? (
               <>
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Processing...</span>
+                <span>{confirmLabel}</span>
               </>
             ) : (
               confirmLabel

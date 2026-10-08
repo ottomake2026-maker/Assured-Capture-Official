@@ -1,4 +1,5 @@
-import { auth } from './firebaseAuth';
+import { auth, db } from './firebaseAuth';
+import { doc, setDoc, getDocs, collection } from 'firebase/firestore';
 import { ManagedUser } from '../types';
 
 async function getAuthHeaders(): Promise<HeadersInit> {
@@ -15,20 +16,76 @@ async function getAuthHeaders(): Promise<HeadersInit> {
 
 export async function fetchUsersList(): Promise<ManagedUser[]> {
   const headers = await getAuthHeaders();
-  const res = await fetch('/api/admin/users', { headers });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || `Failed to fetch users (status ${res.status})`);
+  let serverUsers: ManagedUser[] = [];
+  try {
+    const res = await fetch('/api/admin/users', { headers });
+    if (res.ok) {
+      const data = await res.json();
+      serverUsers = data.users || [];
+    }
+  } catch (e) {
+    console.warn('Notice fetching from /api/admin/users:', e);
   }
-  const data = await res.json();
-  return data.users || [];
+
+  const usersMap = new Map<string, ManagedUser>();
+  for (const u of serverUsers) {
+    usersMap.set(u.uid, u);
+  }
+
+  // Also query Firestore authorized_users collection directly
+  try {
+    const snap = await getDocs(collection(db, 'authorized_users'));
+    for (const d of snap.docs) {
+      const docData = d.data();
+      const uid = docData.userId || d.id;
+      if (uid) {
+        if (usersMap.has(uid)) {
+          const existing = usersMap.get(uid)!;
+          if (docData.displayName && !existing.displayName) {
+            existing.displayName = docData.displayName;
+          }
+          if (docData.role && existing.role !== 'Administrator') {
+            existing.role = docData.role === 'Administrator' ? 'Administrator' : 'User';
+          }
+        } else {
+          usersMap.set(uid, {
+            uid,
+            email: docData.email || '',
+            displayName: docData.displayName || docData.email || 'User',
+            role: docData.role === 'Administrator' ? 'Administrator' : 'User',
+            disabled: Boolean(docData.disabled),
+            status: Boolean(docData.disabled) ? 'Disabled' : 'Active',
+            createdAt: docData.createdAt || new Date().toISOString(),
+          });
+        }
+      }
+    }
+  } catch (fsErr) {
+    console.warn('Notice querying client Firestore authorized_users:', fsErr);
+  }
+
+  // Always ensure current admin user is present
+  const currentUser = auth.currentUser;
+  if (currentUser && !usersMap.has(currentUser.uid)) {
+    const isRoot = (currentUser.email || '').toLowerCase() === 'ottomake2026@gmail.com';
+    usersMap.set(currentUser.uid, {
+      uid: currentUser.uid,
+      email: currentUser.email || '',
+      displayName: currentUser.displayName || currentUser.email || 'Administrator',
+      role: 'Administrator',
+      disabled: false,
+      status: 'Active',
+      createdAt: new Date().toISOString(),
+    });
+  }
+
+  return Array.from(usersMap.values());
 }
 
 export async function createNewUser(payload: {
+  fullName: string;
   email: string;
   password: string;
-  displayName?: string;
-  role: 'Administrator' | 'User';
 }): Promise<ManagedUser> {
   const headers = await getAuthHeaders();
   const res = await fetch('/api/admin/users', {
@@ -37,14 +94,37 @@ export async function createNewUser(payload: {
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || `Failed to create user (status ${res.status})`);
+    let errorMsg = `Failed to create user (status ${res.status})`;
+    try {
+      const errorData = await res.json();
+      if (errorData.error) errorMsg = errorData.error;
+    } catch {
+      // ignore
+    }
+    throw new Error(errorMsg);
   }
   const data = await res.json();
-  return data.user;
+  const createdUser = data.user;
+
+  // Persist directly to Firestore using client Firestore SDK
+  try {
+    await setDoc(doc(db, 'authorized_users', createdUser.uid), {
+      userId: createdUser.uid,
+      email: createdUser.email,
+      displayName: createdUser.displayName,
+      role: 'User',
+      status: 'Active',
+      disabled: false,
+      createdAt: createdUser.createdAt || new Date().toISOString(),
+    });
+  } catch (fsErr) {
+    console.warn('Notice writing to Firestore from client:', fsErr);
+  }
+
+  return createdUser;
 }
 
-export async function updateUserStatus(uid: string, disabled: boolean): Promise<void> {
+export async function updateUserStatus(uid: string, disabled: boolean): Promise<ManagedUser> {
   const headers = await getAuthHeaders();
   const res = await fetch(`/api/admin/users/${encodeURIComponent(uid)}/status`, {
     method: 'PATCH',
@@ -52,22 +132,32 @@ export async function updateUserStatus(uid: string, disabled: boolean): Promise<
     body: JSON.stringify({ disabled }),
   });
   if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || `Failed to update user status (status ${res.status})`);
+    let errorMsg = `Failed to update user status (status ${res.status})`;
+    try {
+      const errorData = await res.json();
+      if (errorData.error) errorMsg = errorData.error;
+    } catch {
+      // ignore
+    }
+    throw new Error(errorMsg);
   }
-}
+  const data = await res.json();
 
-export async function updateUserRole(uid: string, role: 'Administrator' | 'User'): Promise<void> {
-  const headers = await getAuthHeaders();
-  const res = await fetch(`/api/admin/users/${encodeURIComponent(uid)}/role`, {
-    method: 'PATCH',
-    headers,
-    body: JSON.stringify({ role }),
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.error || `Failed to update user role (status ${res.status})`);
+  // Sync status to Firestore using client Firestore SDK
+  try {
+    await setDoc(
+      doc(db, 'authorized_users', uid),
+      {
+        disabled,
+        status: disabled ? 'Disabled' : 'Active',
+      },
+      { merge: true }
+    );
+  } catch (fsErr) {
+    console.warn('Notice updating Firestore status from client:', fsErr);
   }
+
+  return data.user;
 }
 
 export async function checkMyAuthStatus(): Promise<{

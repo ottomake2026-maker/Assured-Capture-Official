@@ -103,4 +103,15 @@ export interface UserProfile {
   updatedAt?: string;
 }
 
-export type ActiveScreen = 'reports_home' | 'report_detail' | 'issues_list' | 'issue_detail' | 'photo_detail' | 'user_profile';
+export interface ManagedUser {
+  uid: string;
+  email: string;
+  displayName: string;
+  role: 'Administrator' | 'User';
+  disabled: boolean;
+  status: 'Active' | 'Disabled';
+  createdAt: string;
+  lastSignInTime?: string;
+}
+
+export type ActiveScreen = 'reports_home' | 'report_detail' | 'issues_list' | 'issue_detail' | 'photo_detail' | 'user_profile' | 'admin_users';

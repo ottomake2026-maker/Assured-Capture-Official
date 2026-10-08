@@ -6,6 +6,7 @@ import { Search, Calendar, MapPin, Building, FileText, Download, Check, AlertCir
 import { exportPhotoReportDocx } from '../utils/docxExport';
 import { exportPhotoReportPdf } from '../utils/pdfExport';
 import { ExportFormatDialog } from './ExportFormatDialog';
+import { AssuredSelect } from './AssuredSelect';
 import { ConnectivitySyncBadge } from './OfflineIndicator';
 import { PWAInstallButton } from './PWAInstallButton';
 
@@ -269,11 +270,10 @@ export const ReportsHomeScreen: React.FC<ReportsHomeScreenProps> = ({
           </div>
 
           <div className="sm:w-48 shrink-0">
-            <select
+            <AssuredSelect
               id="reports_status_filter"
               value={statusFilter}
-              onChange={e => setStatusFilter(e.target.value)}
-              className="w-full px-3.5 py-3 bg-white border border-[#0E1E2B]/15 rounded-lg text-sm sm:text-base font-medium text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[48px] cursor-pointer"
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStatusFilter(e.target.value)}
               aria-label="Filter reports by status"
             >
               <option value="All">All</option>
@@ -282,7 +282,7 @@ export const ReportsHomeScreen: React.FC<ReportsHomeScreenProps> = ({
                   {st}
                 </option>
               ))}
-            </select>
+            </AssuredSelect>
           </div>
         </div>
 

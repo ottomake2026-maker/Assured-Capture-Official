@@ -16,10 +16,11 @@ service cloud.firestore {
 
     function isAdmin() {
       return isAuthenticated() && (
-        request.auth.token.email == 'ottomake2026@gmail.com' ||
+        request.auth.token.email.matches('(?i)ottomake2026@gmail.com') ||
         (
           exists(/databases/$(database)/documents/authorized_users/$(request.auth.uid)) &&
-          get(/databases/$(database)/documents/authorized_users/$(request.auth.uid)).data.role == 'admin' &&
+          (get(/databases/$(database)/documents/authorized_users/$(request.auth.uid)).data.role == 'admin' ||
+           get(/databases/$(database)/documents/authorized_users/$(request.auth.uid)).data.role == 'Administrator') &&
           get(/databases/$(database)/documents/authorized_users/$(request.auth.uid)).data.status == 'Active'
         )
       );

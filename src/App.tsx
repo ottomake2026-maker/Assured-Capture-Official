@@ -37,6 +37,7 @@ import { useOnlineStatus } from './utils/useOnlineStatus';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import { initAuth, logout, auth } from './utils/firebaseAuth';
 import { syncLocalDataToFirestore } from './utils/firestoreSync';
+import { checkMyAuthStatus } from './utils/adminApi';
 import { User } from 'firebase/auth';
 import { AuthScreen } from './components/AuthScreen';
 import { ReportsHomeScreen } from './components/ReportsHomeScreen';
@@ -45,6 +46,7 @@ import { IssuesListScreen } from './components/IssuesListScreen';
 import { IssueDetailScreen } from './components/IssueDetailScreen';
 import { PhotoDetailScreen } from './components/PhotoDetailScreen';
 import { UserProfileScreen } from './components/UserProfileScreen';
+import { AdminUsersScreen } from './components/AdminUsersScreen';
 import { AssuredLogo } from './components/AssuredLogo';
 import { AlertCircle } from 'lucide-react';
 
@@ -198,6 +200,21 @@ export default function App() {
               console.warn('Initial profile cloud sync notice:', err);
             }
           }
+
+          // Fetch authoritative server session role
+          try {
+            const authStatus = await checkMyAuthStatus();
+            if (authStatus && authStatus.role) {
+              profile.role = authStatus.role;
+            }
+          } catch (authErr) {
+            if ((user.email || '').toLowerCase() === 'ottomake2026@gmail.com') {
+              profile.role = 'Administrator';
+            } else if (!profile.role) {
+              profile.role = 'User';
+            }
+          }
+
           setUserProfile(profile);
         } catch (profileErr) {
           console.warn('Profile fetch error:', profileErr);
@@ -749,9 +766,31 @@ export default function App() {
             onSaveProfile={handleSaveUserProfile}
             onSignOut={handleSignOut}
             onRequestSignIn={handleRequestSignIn}
+            onOpenAdminUsers={() => setActiveScreen('admin_users')}
             isGuest={!currentUser}
             onSyncComplete={refreshReports}
           />
+        )}
+
+        {activeScreen === 'admin_users' && (
+          currentUser && ((currentUser.email || '').toLowerCase() === 'ottomake2026@gmail.com' || userProfile.role === 'Administrator') ? (
+            <AdminUsersScreen
+              currentUserProfile={userProfile}
+              onBack={() => setActiveScreen('user_profile')}
+            />
+          ) : (
+            <UserProfileScreen
+              profile={userProfile}
+              reports={reports}
+              onBack={() => setActiveScreen('reports_home')}
+              onSaveProfile={handleSaveUserProfile}
+              onSignOut={handleSignOut}
+              onRequestSignIn={handleRequestSignIn}
+              onOpenAdminUsers={() => setActiveScreen('admin_users')}
+              isGuest={!currentUser}
+              onSyncComplete={refreshReports}
+            />
+          )
         )}
 
         {activeScreen === 'report_detail' && activeReport && (

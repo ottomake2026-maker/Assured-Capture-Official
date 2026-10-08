@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Report, Issue, Photo, TextBoxAnnotation } from '../types';
 import { ConfirmationDialog } from './ConfirmationDialog';
 import { VoiceTranscriptionControl } from './VoiceTranscriptionControl';
+import { AssuredSelect } from './AssuredSelect';
 import {
   ArrowLeft,
   Save,
@@ -15,6 +16,8 @@ import {
   Camera,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   GripVertical,
   Type,
   Clock,
@@ -258,6 +261,25 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
       }
     }
   }, [descriptionScrollbarOffset]);
+
+  // Mobile keyboard visibility & focus tracking
+  const [isInputFocused, setIsInputFocused] = useState(false);
+  const blurTimeoutRef = useRef<any>(null);
+
+  const handleFieldFocus = (e: React.FocusEvent<HTMLTextAreaElement>) => {
+    if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+    setIsInputFocused(true);
+    const target = e.currentTarget;
+    setTimeout(() => {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 280);
+  };
+
+  const handleFieldBlur = () => {
+    blurTimeoutRef.current = setTimeout(() => {
+      setIsInputFocused(false);
+    }, 250);
+  };
 
   useEffect(() => {
     syncDescriptionScroll();
@@ -826,8 +848,8 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
   const hasNext = photoIndex >= 0 && photoIndex < photos.length - 1;
 
   return (
-    <div className="w-full max-w-3xl lg:max-w-4xl mx-auto px-4 py-4 sm:px-6 sm:py-6 space-y-5 sm:space-y-7">
-      {/* Header: Back navigation to Issue Detail and sequential evidence navigation */}
+    <div className="w-full max-w-3xl lg:max-w-4xl mx-auto px-4 py-4 sm:px-6 sm:py-6 space-y-5 sm:space-y-7 pb-36 sm:pb-40">
+      {/* Header: Back navigation to Issue Detail and report reference */}
       <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#0E1E2B]/10">
         <button
           type="button"
@@ -839,39 +861,12 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
           <span>ISSUE {String(issue.issueNumber).padStart(2, '0')}</span>
         </button>
 
-        {photos && photos.length > 1 && onSelectPhoto && (
-          <div className="flex items-center gap-1.5 bg-white px-2 py-1 rounded-lg border border-[#0E1E2B]/15 shadow-2xs">
-            <button
-              type="button"
-              disabled={!hasPrev}
-              onClick={() => {
-                if (hasPrev) onSelectPhoto(photos[photoIndex - 1].id);
-              }}
-              className="px-2 py-1 rounded text-xs font-bold font-mono text-[#0E1E2B] hover:bg-[#F4F6F8] disabled:opacity-25 cursor-pointer disabled:cursor-not-allowed touch-manipulation min-h-[32px] transition-opacity"
-              title="Previous Evidence Photo"
-              aria-label="Previous Evidence Photo"
-            >
-              ← Prev
-            </button>
-            <span className="text-[11px] font-mono text-[#0E1E2B]/60 px-1 select-none">
+        <div className="flex items-center gap-2">
+          {photos && photos.length > 1 && (
+            <span className="text-[11px] font-mono font-semibold text-[#0E1E2B]/70 bg-white px-2.5 py-1 rounded-md border border-[#0E1E2B]/15">
               {photoIndex + 1} of {photos.length}
             </span>
-            <button
-              type="button"
-              disabled={!hasNext}
-              onClick={() => {
-                if (hasNext) onSelectPhoto(photos[photoIndex + 1].id);
-              }}
-              className="px-2 py-1 rounded text-xs font-bold font-mono text-[#0E1E2B] hover:bg-[#F4F6F8] disabled:opacity-25 cursor-pointer disabled:cursor-not-allowed touch-manipulation min-h-[32px] transition-opacity"
-              title="Next Evidence Photo"
-              aria-label="Next Evidence Photo"
-            >
-              Next →
-            </button>
-          </div>
-        )}
-
-        <div className="flex items-center gap-2">
+          )}
           <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/50 hidden sm:inline-block">
             REPORT REF:
           </span>
@@ -949,15 +944,15 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
               <button
                 type="button"
                 onClick={() => setIsMarkupActive(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-[#F4F6F8] active:bg-[#E5E8EB] border border-[#0E1E2B]/20 hover:border-[#0E1E2B] rounded-lg text-xs font-bold text-[#0E1E2B] transition-colors cursor-pointer touch-manipulation min-h-[38px] shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#628EF7]/30"
+                className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-white hover:bg-[#F4F6F8] active:bg-[#E5E8EB] border border-[#0E1E2B]/20 hover:border-[#0E1E2B] rounded-lg text-xs sm:text-sm font-bold text-[#0E1E2B] transition-colors cursor-pointer touch-manipulation min-h-[44px] shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#628EF7]/30"
                 aria-label="Draw or markup photographic evidence"
               >
-                <PenTool className="w-3.5 h-3.5 text-[#628EF7]" />
+                <PenTool className="w-4 h-4 text-[#628EF7] stroke-[2.2]" />
                 <span>Draw / Markup</span>
               </button>
             ) : (
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-[#628EF7]/10 border border-[#628EF7]/30 rounded-lg text-xs font-bold text-[#628EF7] font-mono">
-                <span className="w-2 h-2 rounded-full bg-[#628EF7] animate-pulse" />
+              <span className="inline-flex items-center gap-2 px-3.5 py-2 bg-[#628EF7]/10 border border-[#628EF7]/30 rounded-lg text-xs sm:text-sm font-bold text-[#628EF7] font-mono min-h-[44px]">
+                <span className="w-2.5 h-2.5 rounded-full bg-[#628EF7] animate-pulse" />
                 <span>Markup Mode</span>
               </span>
             )}
@@ -1073,14 +1068,14 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
           </div>
         )}
 
-        {/* Dominant Photograph Presentation: Slightly more vertical prominence (min-h: 320px on mobile, 480px on desktop; max-h 76vh), natural aspect ratio */}
-        <div className="relative w-full bg-[#0E1E2B] rounded-xl border border-[#0E1E2B]/15 overflow-hidden shadow-sm flex items-center justify-center min-h-[320px] sm:min-h-[480px]">
+        {/* Dominant Photograph Presentation: centered, properly contained, responsive screen space */}
+        <div className="relative w-full bg-[#0E1E2B] rounded-xl border border-[#0E1E2B]/15 overflow-hidden shadow-sm flex items-center justify-center min-h-[340px] sm:min-h-[480px] lg:min-h-[520px]">
           <div ref={imageContainerRef} className="relative inline-block max-w-full">
             <img
               ref={imageRef}
               src={isMarkupActive ? baseImageFile : currentImageFile}
               alt={description || `Evidence photo for ${linkedIssueLabel}`}
-              className="w-full h-auto max-h-[76vh] object-contain block mx-auto"
+              className="w-full h-auto max-h-[74vh] sm:max-h-[78vh] object-contain block mx-auto select-none"
             />
 
             {/* Interactive Canvas Overlay in Markup Mode */}
@@ -1221,22 +1216,44 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
         </div>
       </section>
 
-      {/* 3. OBSERVATION SECTION - Preserved with Describe by Voice & generous vertical space */}
+      {/* 3. OBSERVATION & NOTES SECTION */}
       <section className="space-y-3 pt-1">
         <div className="border-b border-[#0E1E2B]/10 pb-2 flex items-center justify-between">
           <div>
             <h2 className="text-[11px] sm:text-xs font-mono font-bold uppercase tracking-[0.2em] text-[#0E1E2B]">
-              OBSERVATION
+              OBSERVATIONS &amp; NOTES
             </h2>
           </div>
         </div>
 
         <div className="bg-white rounded-xl border border-[#0E1E2B]/15 p-4 sm:p-5 shadow-2xs space-y-4">
-          <div>
-            <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
-              <label className="block text-[11px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/80">
-                Defect Observations &amp; Field Notes
+          {/* 1. Voice input first: Describe by Voice is the most prominent input method positioned before text entry */}
+          <div className="space-y-1.5 pb-1">
+            <div className="flex items-center justify-between">
+              <label className="block text-[11px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/75">
+                Voice Dictation
               </label>
+              <span className="text-[11px] font-mono text-[#0E1E2B]/50">
+                Tap to speak notes
+              </span>
+            </div>
+            <VoiceTranscriptionControl onTranscriptReceived={handleTranscriptReceived} />
+          </div>
+
+          {/* 2. Defect Observation (Appears in report) */}
+          <div className="pt-2 border-t border-[#0E1E2B]/10">
+            <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <label
+                  htmlFor="photo_description_textarea"
+                  className="block text-xs sm:text-sm font-bold text-[#0E1E2B]"
+                >
+                  Defect Observation
+                </label>
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  Appears in report
+                </span>
+              </div>
               {/* Live Character Counter: 250 recommended limit with overflow tracking */}
               <div className="flex items-center gap-1.5 font-mono text-[11px] flex-wrap">
                 <span className={isDescOverLimit ? 'font-bold text-red-600' : 'text-[#0E1E2B]/60 font-medium'}>
@@ -1256,7 +1273,7 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
                 <div
                   ref={descriptionBackdropRef}
                   aria-hidden="true"
-                  className="absolute inset-0 w-full h-full text-sm sm:text-base font-normal px-3.5 py-3 rounded-lg leading-relaxed break-words whitespace-pre-wrap overflow-hidden pointer-events-none select-none border border-transparent"
+                  className="absolute inset-0 w-full h-full text-base font-normal px-3.5 py-3 rounded-lg leading-relaxed break-words whitespace-pre-wrap overflow-hidden pointer-events-none select-none border border-transparent"
                   style={{
                     paddingRight: `${14 + descriptionScrollbarOffset}px`,
                   }}
@@ -1269,36 +1286,22 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
                 </div>
               )}
               <textarea
+                id="photo_description_textarea"
                 ref={descriptionTextareaRef}
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 onScroll={syncDescriptionScroll}
-                rows={6}
-                className={`w-full text-sm sm:text-base font-normal px-3.5 py-3 rounded-lg border focus:ring-2 outline-none transition-colors min-h-[150px] leading-relaxed break-words whitespace-pre-wrap relative z-[1] selection:bg-[#628EF7]/30 ${
+                onFocus={handleFieldFocus}
+                onBlur={handleFieldBlur}
+                rows={5}
+                placeholder="Describe observed defect, physical condition, and field findings..."
+                className={`w-full text-base font-normal px-3.5 py-3 rounded-lg border outline-none transition-colors min-h-[140px] leading-relaxed break-words whitespace-pre-wrap relative z-[1] selection:bg-[#628EF7]/30 ${
                   isDescOverLimit
-                    ? 'bg-transparent text-transparent caret-[#0E1E2B] border-red-300 focus:border-red-500 focus:ring-red-500/20'
-                    : 'bg-white text-[#0E1E2B] border-[#0E1E2B]/20 focus:border-[#628EF7] focus:ring-[#628EF7]/20'
+                    ? 'bg-transparent text-transparent caret-[#0E1E2B] border-red-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20'
+                    : 'bg-white text-[#0E1E2B] border-[#0E1E2B]/20 focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20'
                 }`}
               />
             </div>
-          </div>
-
-          {/* Voice Transcription helper: Preserved functionality */}
-          <div>
-            <VoiceTranscriptionControl onTranscriptReceived={handleTranscriptReceived} />
-          </div>
-
-          {/* Surveyor Field Notes (Internal Only) */}
-          <div className="pt-3 border-t border-[#0E1E2B]/10">
-            <label className="block text-[11px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/80 mb-1.5">
-              Surveyor Field Notes (Internal Only)
-            </label>
-            <textarea
-              value={internalNotes}
-              onChange={e => setInternalNotes(e.target.value)}
-              rows={3}
-              className="w-full text-sm font-normal px-3.5 py-2.5 bg-[#F8FAFC] border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all leading-relaxed"
-            />
           </div>
 
           {/* Include in Photo Report Toggle */}
@@ -1320,8 +1323,24 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
             }`}
           >
             <div>
-              <span className="block text-xs sm:text-sm font-semibold text-[#0E1E2B]">
-                Include in Photo Report
+              <div className="flex items-center gap-2">
+                <span className="block text-xs sm:text-sm font-semibold text-[#0E1E2B]">
+                  Include in Photo Report
+                </span>
+                <span
+                  className={`text-[10px] font-mono font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${
+                    includeInReport
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-slate-100 text-slate-600 border-slate-200'
+                  }`}
+                >
+                  {includeInReport ? 'Appears in report' : 'Excluded from report'}
+                </span>
+              </div>
+              <span className="block text-[11px] text-[#0E1E2B]/60 font-normal mt-0.5">
+                {includeInReport
+                  ? 'This photo and observation will be published in client reports.'
+                  : 'Excluded from exported reports (preserved in field archive).'}
               </span>
             </div>
             <div
@@ -1336,6 +1355,36 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
                 }`}
               />
             </div>
+          </div>
+
+          {/* 3. Surveyor Field Notes (Internal only) */}
+          <div className="pt-3 border-t border-[#0E1E2B]/10">
+            <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
+                <label
+                  htmlFor="photo_internal_notes_textarea"
+                  className="block text-xs sm:text-sm font-bold text-[#0E1E2B]"
+                >
+                  Surveyor Field Notes
+                </label>
+                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
+                  Internal only
+                </span>
+              </div>
+              <span className="text-[11px] text-[#0E1E2B]/50 font-mono">
+                Not visible in client report
+              </span>
+            </div>
+            <textarea
+              id="photo_internal_notes_textarea"
+              value={internalNotes}
+              onChange={e => setInternalNotes(e.target.value)}
+              onFocus={handleFieldFocus}
+              onBlur={handleFieldBlur}
+              rows={3}
+              placeholder="Private surveyor notes, diagnostics, internal reminders..."
+              className="w-full text-base font-normal px-3.5 py-2.5 bg-[#F8FAFC] border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all leading-relaxed"
+            />
           </div>
         </div>
       </section>
@@ -1370,17 +1419,18 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
               Associated Defect Issue
             </label>
             {issues.length > 0 ? (
-              <select
+              <AssuredSelect
+                id="photo_associated_issue_select"
                 value={selectedIssueId}
-                onChange={e => setSelectedIssueId(e.target.value)}
-                className="w-full text-sm font-medium px-3.5 py-2.5 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[44px]"
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedIssueId(e.target.value)}
+                aria-label="Associated Defect Issue"
               >
                 {issues.map(iss => (
                   <option key={iss.id} value={iss.id}>
                     Issue {String(iss.issueNumber).padStart(2, '0')}: {iss.issueName || '(Untitled Defect)'}
                   </option>
                 ))}
-              </select>
+              </AssuredSelect>
             ) : (
               <div className="p-3 bg-[#F4F6F8] rounded-lg border border-[#0E1E2B]/15 text-xs font-mono text-[#0E1E2B]">
                 Issue {issue.issueNumber}: {issue.issueName || 'Current Defect'}
@@ -1434,45 +1484,7 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
         </div>
       </section>
 
-      {/* 5. PRIMARY FINAL ACTION: SAVE PHOTO */}
-      <div className="pt-2 space-y-2">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={isSaving}
-          className={`w-full py-3.5 px-6 rounded-lg font-bold text-xs uppercase tracking-wider min-h-[48px] sm:min-h-[52px] shadow-sm flex items-center justify-center gap-2.5 transition-colors touch-manipulation active:scale-[0.99] cursor-pointer ${
-            saveSuccess
-              ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
-              : 'bg-[#628EF7] hover:bg-[#4E7AF2] active:bg-[#3E69E0] text-white focus:ring-4 focus:ring-[#628EF7]/25'
-          } ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
-        >
-          {isSaving ? (
-            <>
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              <span>Saving Photo...</span>
-            </>
-          ) : saveSuccess ? (
-            <>
-              <Check className="w-4 h-4 stroke-[2.5]" />
-              <span>Photo Saved!</span>
-            </>
-          ) : (
-            <>
-              <Save className="w-4 h-4 stroke-[2.2]" />
-              <span>SAVE PHOTO</span>
-            </>
-          )}
-        </button>
-
-        {saveError && (
-          <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-900 text-xs font-semibold flex items-center gap-2">
-            <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-            <span>{saveError}</span>
-          </div>
-        )}
-      </div>
-
-      {/* 6. SECONDARY DESTRUCTIVE ACTION: DELETE PHOTO */}
+      {/* 5. SECONDARY DESTRUCTIVE ACTION: DELETE PHOTO */}
       <div className="pt-6 sm:pt-8 border-t border-[#0E1E2B]/10">
         <button
           type="button"
@@ -1502,6 +1514,100 @@ export const PhotoDetailScreen: React.FC<PhotoDetailScreenProps> = ({
         onConfirm={handleConfirmDelete}
         onCancel={() => setIsDeleteDialogOpen(false)}
       />
+
+      {/* 6. FIXED BOTTOM ACTIONS: COORDINATED EVIDENCE NAVIGATION & PRIMARY SAVE PHOTO */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-[#0E1E2B]/15 shadow-lg select-none"
+        style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+      >
+        <div className="w-full max-w-3xl lg:max-w-4xl mx-auto px-4 sm:px-6 pt-2 pb-2.5 flex flex-col gap-2">
+          {saveError && (
+            <div className="p-2.5 sm:p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-900 text-xs font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{saveError}</span>
+            </div>
+          )}
+
+          {/* Sequential Evidence Navigation (Previous / Position / Next) */}
+          {onSelectPhoto && photos && photos.length > 0 && (
+            <div className="flex items-center justify-between gap-3 border-b border-[#0E1E2B]/10 pb-2">
+              {/* Previous Photo Button */}
+              <button
+                type="button"
+                disabled={!hasPrev}
+                onClick={() => {
+                  if (hasPrev && onSelectPhoto && photos) {
+                    onSelectPhoto(photos[photoIndex - 1].id);
+                  }
+                }}
+                className="inline-flex items-center justify-center gap-1 px-3 sm:px-4 py-2 rounded-lg border border-[#0E1E2B]/20 bg-white hover:bg-[#F4F6F8] active:bg-[#E5E8EB] disabled:opacity-30 disabled:border-[#0E1E2B]/10 disabled:bg-[#F8FAFC] disabled:cursor-not-allowed text-[#0E1E2B] font-mono font-bold text-xs uppercase tracking-wider min-h-[44px] min-w-[76px] touch-manipulation transition-colors cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#628EF7]/30"
+                title="Previous Evidence Photo"
+                aria-label="Previous Evidence Photo"
+              >
+                <ChevronLeft className="w-4 h-4 stroke-[2.5]" />
+                <span>Prev</span>
+              </button>
+
+              {/* Current Position (e.g. "1 of 10") */}
+              <div className="flex flex-col items-center justify-center text-center px-2 min-w-0 select-none">
+                <span className="text-[10px] font-mono uppercase tracking-[0.15em] text-[#0E1E2B]/55 font-bold">
+                  EVIDENCE
+                </span>
+                <span className="text-xs sm:text-sm font-mono font-bold text-[#0E1E2B] tracking-tight">
+                  {photoIndex >= 0 ? photoIndex + 1 : 1} of {totalPhotosCount}
+                </span>
+              </div>
+
+              {/* Next Photo Button */}
+              <button
+                type="button"
+                disabled={!hasNext}
+                onClick={() => {
+                  if (hasNext && onSelectPhoto && photos) {
+                    onSelectPhoto(photos[photoIndex + 1].id);
+                  }
+                }}
+                className="inline-flex items-center justify-center gap-1 px-3 sm:px-4 py-2 rounded-lg border border-[#0E1E2B]/20 bg-white hover:bg-[#F4F6F8] active:bg-[#E5E8EB] disabled:opacity-30 disabled:border-[#0E1E2B]/10 disabled:bg-[#F8FAFC] disabled:cursor-not-allowed text-[#0E1E2B] font-mono font-bold text-xs uppercase tracking-wider min-h-[44px] min-w-[76px] touch-manipulation transition-colors cursor-pointer shadow-2xs focus:outline-none focus:ring-2 focus:ring-[#628EF7]/30"
+                title="Next Evidence Photo"
+                aria-label="Next Evidence Photo"
+              >
+                <span>Next</span>
+                <ChevronRight className="w-4 h-4 stroke-[2.5]" />
+              </button>
+            </div>
+          )}
+
+          {/* Primary Save Photo Action */}
+          <button
+            type="button"
+            id="btn_save_photo"
+            onClick={handleSave}
+            disabled={isSaving}
+            className={`w-full py-3.5 px-5 rounded-lg font-bold text-xs sm:text-sm uppercase tracking-wider min-h-[52px] flex items-center justify-center gap-2 transition-all touch-manipulation cursor-pointer active:scale-[0.99] focus:outline-none focus:ring-4 focus:ring-[#628EF7]/25 shadow-sm ${
+              saveSuccess
+                ? 'bg-emerald-600 text-white'
+                : 'bg-[#628EF7] hover:bg-[#4E7AF2] active:bg-[#3E69E0] text-white'
+            } ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
+          >
+            {isSaving ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Saving Photo...</span>
+              </>
+            ) : saveSuccess ? (
+              <>
+                <Check className="w-4 h-4 stroke-[2.5]" />
+                <span>Photo Saved!</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 stroke-[2.2]" />
+                <span>Save Photo</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

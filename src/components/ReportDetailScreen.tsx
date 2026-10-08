@@ -7,6 +7,8 @@ import { AssuredLogo } from './AssuredLogo';
 import { exportPhotoReportDocx } from '../utils/docxExport';
 import { exportPhotoReportPdf } from '../utils/pdfExport';
 import { ExportFormatDialog } from './ExportFormatDialog';
+import { PhotoReportPreviewModal } from './PhotoReportPreviewModal';
+import { AssuredSelect } from './AssuredSelect';
 import { getTwoDigitYear } from '../db/storage';
 import {
   ArrowLeft,
@@ -22,6 +24,7 @@ import {
   ImagePlus,
   Upload,
   FileDown,
+  Eye,
 } from 'lucide-react';
 
 interface ReportDetailScreenProps {
@@ -135,10 +138,12 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [jobRefError, setJobRefError] = useState<string | null>(null);
 
-  // Export state
+  // Export & Preview state
   const [isExporting, setIsExporting] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [exportingFormat, setExportingFormat] = useState<'pdf' | 'docx' | null>(null);
   const [exportFeedback, setExportFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
@@ -183,6 +188,8 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
     setJobNumber(val);
     const fullRef = jobPrefix ? `${jobPrefix}${val}` : val;
     setJobReference(fullRef);
+    if (jobRefError) setJobRefError(null);
+    if (saveError) setSaveError(null);
   };
 
   // Compress image to manageable web resolution
@@ -315,9 +322,12 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
         fullJobRef !== '' &&
         (!jobPrefix || fullJobRef !== jobPrefix.trim() || jobNumber.trim() !== '');
 
-      if ((isNew || isNewReport) && !isJobRefEntered) {
-        setSaveError('Please enter a Job Reference to save the report.');
+      if (!isJobRefEntered) {
+        setJobRefError('Job Reference is required.');
+        setSaveError('Please enter a Job Reference before saving.');
         setIsSaving(false);
+        const el = document.getElementById(jobPrefix ? 'input_job_reference_number' : 'input_job_reference');
+        el?.focus();
         return;
       }
 
@@ -402,7 +412,7 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
   };
 
   return (
-    <div className="w-full max-w-3xl lg:max-w-4xl mx-auto px-4 py-4 sm:px-6 sm:py-6 space-y-6 sm:space-y-8">
+    <div className="w-full max-w-3xl lg:max-w-4xl mx-auto px-4 py-4 sm:px-6 sm:py-6 pb-28 sm:pb-32 space-y-6 sm:space-y-8">
       {/* Top navigation: Compact, subtle border */}
       <div className="flex items-center justify-between gap-3 pb-3 border-b border-[#0E1E2B]/10">
         <button
@@ -471,15 +481,12 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
         </div>
       </header>
 
-      {/* 2. SECTION HIERARCHY: REPORT INFORMATION */}
+      {/* 1. SECTION: DETAILS */}
       <section className="space-y-4 pt-1">
-        {/* Editorial Section Heading */}
-        <div className="border-b border-[#0E1E2B]/10 pb-2 flex items-baseline justify-between gap-3">
-          <div>
-            <h2 className="text-[11px] sm:text-xs font-mono font-bold uppercase tracking-[0.2em] text-[#0E1E2B]">
-              REPORT INFORMATION
-            </h2>
-          </div>
+        <div className="border-b border-[#0E1E2B]/12 pb-2 flex items-baseline justify-between gap-3">
+          <h2 className="text-xs sm:text-sm font-mono font-bold uppercase tracking-[0.2em] text-[#0E1E2B]">
+            Details
+          </h2>
           {isNew && (
             <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#628EF7] bg-[#628EF7]/10 px-2 py-0.5 rounded shrink-0">
               Step 1 of inspection
@@ -487,18 +494,27 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
           )}
         </div>
 
-        {/* Inputs sitting cleanly with restrained 1px borders */}
         <div className="space-y-4">
           {/* Job Reference & Report Type */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[11px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/80 mb-1.5">
-                Job Reference <span className="text-rose-600">*</span>
+              <label
+                htmlFor={jobPrefix ? 'input_job_reference_number' : 'input_job_reference'}
+                className="block text-xs font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/90 mb-1.5 flex items-center justify-between"
+              >
+                <span>
+                  Job Reference <span className="text-rose-600 font-bold ml-0.5" aria-hidden="true">*</span>
+                </span>
+                <span className="text-[10px] font-mono text-[#0E1E2B]/50 font-normal">REQUIRED</span>
               </label>
               {jobPrefix ? (
-                <div className="flex items-stretch w-full bg-white border border-[#0E1E2B]/20 rounded-lg focus-within:border-[#628EF7] focus-within:ring-2 focus-within:ring-[#628EF7]/20 transition-all overflow-hidden min-h-[44px] sm:min-h-[48px]">
+                <div
+                  className={`flex items-stretch w-full bg-white border ${
+                    jobRefError ? 'border-rose-500 ring-2 ring-rose-200' : 'border-[#0E1E2B]/20'
+                  } rounded-lg focus-within:border-[#628EF7] focus-within:ring-2 focus-within:ring-[#628EF7]/20 transition-all overflow-hidden min-h-[52px]`}
+                >
                   <span
-                    className="inline-flex items-center px-3 sm:px-3.5 bg-slate-100/90 border-r border-[#0E1E2B]/15 font-mono font-bold text-sm sm:text-base text-[#0E1E2B] select-none shrink-0 tracking-wider"
+                    className="inline-flex items-center px-3.5 sm:px-4 bg-slate-100/90 border-r border-[#0E1E2B]/15 font-mono font-bold text-sm sm:text-base text-[#0E1E2B] select-none shrink-0 tracking-wider"
                     title={`Automatic ${jobPrefix} prefix`}
                   >
                     {jobPrefix}
@@ -508,7 +524,11 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
                     id="input_job_reference_number"
                     value={jobNumber}
                     onChange={handleJobNumberChange}
-                    className="w-full font-mono font-bold text-sm sm:text-base px-3 sm:px-3.5 py-2.5 sm:py-3 bg-transparent text-[#0E1E2B] outline-none"
+                    placeholder="101"
+                    aria-required="true"
+                    aria-invalid={Boolean(jobRefError)}
+                    aria-describedby={jobRefError ? 'job_reference_error' : undefined}
+                    className="w-full font-mono font-bold text-sm sm:text-base px-3.5 sm:px-4 py-3 sm:py-3.5 bg-transparent text-[#0E1E2B] placeholder:text-[#0E1E2B]/40 outline-none"
                   />
                 </div>
               ) : (
@@ -516,24 +536,43 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
                   type="text"
                   id="input_job_reference"
                   value={jobReference}
-                  onChange={e => setJobReference(e.target.value)}
-                  className="w-full font-mono font-bold text-sm sm:text-base px-3.5 py-2.5 sm:py-3 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[44px] sm:min-h-[48px]"
+                  onChange={(e) => {
+                    setJobReference(e.target.value);
+                    if (jobRefError) setJobRefError(null);
+                    if (saveError) setSaveError(null);
+                  }}
+                  placeholder="e.g. BBC26-101"
+                  aria-required="true"
+                  aria-invalid={Boolean(jobRefError)}
+                  aria-describedby={jobRefError ? 'job_reference_error' : undefined}
+                  className={`w-full font-mono font-bold text-sm sm:text-base px-3.5 sm:px-4 py-3 sm:py-3.5 bg-white border ${
+                    jobRefError ? 'border-rose-500 ring-2 ring-rose-200' : 'border-[#0E1E2B]/20'
+                  } rounded-lg text-[#0E1E2B] placeholder:text-[#0E1E2B]/40 focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[52px]`}
                 />
+              )}
+              {jobRefError && (
+                <div
+                  id="job_reference_error"
+                  role="alert"
+                  className="mt-1.5 p-2 bg-rose-50 border border-rose-200 rounded-md text-rose-800 text-xs font-semibold flex items-center gap-1.5"
+                >
+                  <AlertCircle className="w-3.5 h-3.5 text-rose-600 shrink-0" aria-hidden="true" />
+                  <span>{jobRefError}</span>
+                </div>
               )}
             </div>
 
             <div>
               <label
                 htmlFor="input_report_type"
-                className="block text-[11px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/80 mb-1.5"
+                className="block text-xs font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/90 mb-1.5"
               >
                 Report Type
               </label>
-              <select
+              <AssuredSelect
                 id="input_report_type"
                 value={reportType}
-                onChange={e => setReportType(e.target.value)}
-                className="w-full text-sm sm:text-base font-medium px-3.5 py-2.5 sm:py-3 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[44px] sm:min-h-[48px] cursor-pointer"
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setReportType(e.target.value)}
               >
                 <option value="Photo Report">Photo Report</option>
                 <option value="Draft Photo Report" disabled className="text-gray-400">
@@ -548,33 +587,43 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
                 <option value="Expert Report" disabled className="text-gray-400">
                   Expert Report
                 </option>
-              </select>
+              </AssuredSelect>
             </div>
           </div>
 
           {/* Report Name & Client Name */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[11px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/80 mb-1.5">
+              <label
+                htmlFor="input_report_name"
+                className="block text-xs font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/90 mb-1.5"
+              >
                 Report Name
               </label>
               <input
                 type="text"
+                id="input_report_name"
                 value={reportName}
-                onChange={e => setReportName(e.target.value)}
-                className="w-full text-sm sm:text-base font-normal px-3.5 py-2.5 sm:py-3 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[44px] sm:min-h-[48px]"
+                onChange={(e) => setReportName(e.target.value)}
+                placeholder="e.g. Building Condition Inspection"
+                className="w-full text-sm sm:text-base font-normal px-3.5 sm:px-4 py-3 sm:py-3.5 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] placeholder:text-[#0E1E2B]/45 focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[52px]"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/80 mb-1.5">
+              <label
+                htmlFor="input_client_name"
+                className="block text-xs font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/90 mb-1.5"
+              >
                 Client Name
               </label>
               <input
                 type="text"
+                id="input_client_name"
                 value={clientName}
-                onChange={e => setClientName(e.target.value)}
-                className="w-full text-sm sm:text-base font-normal px-3.5 py-2.5 sm:py-3 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[44px] sm:min-h-[48px]"
+                onChange={(e) => setClientName(e.target.value)}
+                placeholder="e.g. Acme Corporation"
+                className="w-full text-sm sm:text-base font-normal px-3.5 sm:px-4 py-3 sm:py-3.5 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] placeholder:text-[#0E1E2B]/45 focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[52px]"
               />
             </div>
           </div>
@@ -582,29 +631,38 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
           {/* Prepared By & Address / Site Location */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-[11px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/80 mb-1.5">
+              <label
+                htmlFor="input_prepared_by"
+                className="block text-xs font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/90 mb-1.5"
+              >
                 Prepared By
               </label>
               <input
                 type="text"
+                id="input_prepared_by"
                 value="Assured Consultancy Pty Ltd"
                 readOnly
                 disabled
-                className="w-full text-sm sm:text-base font-medium px-3.5 py-2.5 sm:py-3 bg-[#F4F6F8] border border-[#0E1E2B]/15 rounded-lg text-[#0E1E2B]/80 cursor-not-allowed select-none min-h-[44px] sm:min-h-[48px]"
+                className="w-full text-sm sm:text-base font-medium px-3.5 sm:px-4 py-3 sm:py-3.5 bg-[#F4F6F8] border border-[#0E1E2B]/15 rounded-lg text-[#0E1E2B]/80 cursor-not-allowed select-none min-h-[52px]"
                 title="Prepared by is permanently set to Assured Consultancy Pty Ltd"
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/80 mb-1.5">
+              <label
+                htmlFor="input_address"
+                className="block text-xs font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/90 mb-1.5"
+              >
                 Address / Site Location
               </label>
               <div className="relative">
                 <input
                   type="text"
+                  id="input_address"
                   value={address}
-                  onChange={e => setAddress(e.target.value)}
-                  className="w-full text-sm sm:text-base font-normal pl-3.5 pr-12 py-2.5 sm:py-3 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[44px] sm:min-h-[48px]"
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="e.g. 142 Queen St, Brisbane"
+                  className="w-full text-sm sm:text-base font-normal pl-3.5 sm:pl-4 pr-14 py-3 sm:py-3.5 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] placeholder:text-[#0E1E2B]/45 focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[52px]"
                 />
                 <button
                   type="button"
@@ -612,10 +670,10 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
                   disabled={isLocating}
                   title="Pin current GPS coordinates"
                   aria-label="Pin current GPS coordinates"
-                  className="absolute right-1.5 top-1/2 -translate-y-1/2 w-9 h-9 rounded-md bg-[#F4F6F8] hover:bg-[#E5E8EB] active:bg-[#C6CBD1]/60 text-[#0E1E2B] flex items-center justify-center border border-[#0E1E2B]/15 transition-all touch-manipulation focus:outline-none focus:ring-2 focus:ring-[#628EF7]/40 cursor-pointer"
+                  className="absolute right-1.5 top-1/2 -translate-y-1/2 w-10 h-10 rounded-md bg-[#F4F6F8] hover:bg-[#E5E8EB] active:bg-[#C6CBD1]/60 text-[#0E1E2B] flex items-center justify-center border border-[#0E1E2B]/15 transition-all touch-manipulation focus:outline-none focus:ring-2 focus:ring-[#628EF7]/40 cursor-pointer"
                 >
                   {isLocating ? (
-                    <span className="w-3.5 h-3.5 border-2 border-[#0E1E2B]/30 border-t-[#628EF7] rounded-full animate-spin" />
+                    <span className="w-4 h-4 border-2 border-[#0E1E2B]/30 border-t-[#628EF7] rounded-full animate-spin" />
                   ) : (
                     <MapPin className="w-4 h-4 stroke-[2] text-[#628EF7]" />
                   )}
@@ -629,230 +687,211 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
               )}
             </div>
           </div>
-
-          {/* Report Cover Image: Clean outlined area */}
-          <div className="pt-2 space-y-2">
-            <div className="flex items-center justify-between">
-              <label className="block text-[11px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/80">
-                Report Cover Image
-              </label>
-            </div>
-
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageFileChange}
-            />
-
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
-              className="hidden"
-              onChange={handleCameraFileChange}
-            />
-
-            {reportImage ? (
-              <div className="rounded-lg overflow-hidden border border-[#0E1E2B]/20 bg-[#0E1E2B]">
-                <div className="h-44 sm:h-52 w-full flex items-center justify-center bg-[#0E1E2B]">
-                  <img
-                    src={reportImage}
-                    alt="Report cover"
-                    className="max-h-full max-w-full object-contain"
-                  />
-                </div>
-
-                <div className="p-2.5 sm:p-3 bg-[#0E1E2B] text-white flex flex-wrap items-center justify-between gap-2 border-t border-white/10">
-                  <div className="flex items-center gap-2 text-xs font-bold text-white/90">
-                    <ImageIcon className="w-4 h-4 text-[#B2E5F6] shrink-0" />
-                    <span>Cover Photo Active</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => fileInputRef.current?.click()}
-                      disabled={isProcessingImage}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25 active:bg-white/30 text-white text-xs font-semibold transition-all cursor-pointer touch-manipulation min-h-[36px]"
-                    >
-                      <Upload className="w-3.5 h-3.5" />
-                      <span>Change</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => cameraInputRef.current?.click()}
-                      disabled={isProcessingImage}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white/15 hover:bg-white/25 active:bg-white/30 text-white text-xs font-semibold transition-all cursor-pointer touch-manipulation min-h-[36px]"
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      <span>Camera</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setReportImage('')}
-                      className="inline-flex items-center justify-center p-2 rounded-md bg-rose-600/85 hover:bg-rose-600 text-white transition-all cursor-pointer touch-manipulation min-h-[36px] min-w-[36px]"
-                      title="Remove report cover image"
-                      aria-label="Remove report cover image"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="border border-dashed border-[#0E1E2B]/20 rounded-lg p-4 sm:p-5 bg-white text-center">
-                <div className="w-10 h-10 rounded-full bg-[#F4F6F8] border border-[#0E1E2B]/10 flex items-center justify-center mx-auto mb-2 text-[#0E1E2B]/60">
-                  <ImagePlus className="w-5 h-5 stroke-[1.8]" />
-                </div>
-                <p className="text-xs font-medium text-[#0E1E2B] mb-3">
-                  Upload an existing cover photograph or capture on site
-                </p>
-                <div className="flex flex-col sm:flex-row gap-2 max-w-sm mx-auto">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    disabled={isProcessingImage}
-                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-[#0E1E2B]/20 hover:border-[#0E1E2B] bg-white hover:bg-[#F4F6F8] text-[#0E1E2B] font-bold text-xs uppercase tracking-wider transition-all cursor-pointer touch-manipulation focus:outline-none focus:ring-1 focus:ring-[#628EF7] min-h-[44px]"
-                  >
-                    <Upload className="w-3.5 h-3.5 stroke-[2.2]" />
-                    <span>Upload Image</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => cameraInputRef.current?.click()}
-                    disabled={isProcessingImage}
-                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg border border-[#0E1E2B]/20 hover:border-[#0E1E2B] bg-white hover:bg-[#F4F6F8] text-[#0E1E2B] font-bold text-xs uppercase tracking-wider transition-all cursor-pointer touch-manipulation focus:outline-none focus:ring-1 focus:ring-[#628EF7] min-h-[44px]"
-                  >
-                    <Camera className="w-3.5 h-3.5 stroke-[2.2]" />
-                    <span>Take Photo</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {isProcessingImage && (
-              <p className="text-xs text-[#628EF7] font-semibold flex items-center gap-1.5 animate-pulse pt-1">
-                <span className="w-3.5 h-3.5 border-2 border-[#0E1E2B]/20 border-t-[#628EF7] rounded-full animate-spin shrink-0" />
-                <span>Optimizing cover image...</span>
-              </p>
-            )}
-
-            {/* Save Report Information - Repositioned immediately after Report Information fields with electric blue styling */}
-            <div className="pt-3">
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={isSaving}
-                className={`w-full py-3.5 px-5 rounded-lg font-bold text-xs uppercase tracking-wider min-h-[48px] sm:min-h-[52px] flex items-center justify-center gap-2 transition-colors touch-manipulation cursor-pointer active:scale-[0.99] focus:outline-none focus:ring-4 focus:ring-[#628EF7]/25 shadow-xs ${
-                  saveSuccess
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-[#628EF7] hover:bg-[#4E7AF2] active:bg-[#3E69E0] text-white'
-                } ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
-              >
-                {isSaving ? (
-                  <>
-                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Saving Report Information...</span>
-                  </>
-                ) : saveSuccess ? (
-                  <>
-                    <Check className="w-4 h-4 stroke-[2.5]" />
-                    <span>Report Information Saved</span>
-                  </>
-                ) : (
-                  <>
-                    <Save className="w-4 h-4 stroke-[2.2]" />
-                    <span>Save Report Information</span>
-                  </>
-                )}
-              </button>
-
-              {saveError && (
-                <div className="mt-2 p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-900 text-xs font-semibold flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
-                  <span>{saveError}</span>
-                </div>
-              )}
-            </div>
-          </div>
         </div>
       </section>
 
-      {/* 3. SECTION HIERARCHY: SCHEDULE & STATUS */}
-      {!isNew && (
-        <section className="space-y-4 pt-2">
-          {/* Editorial Section Heading */}
-          <div className="border-b border-[#0E1E2B]/10 pb-2">
-            <h2 className="text-[11px] sm:text-xs font-mono font-bold uppercase tracking-[0.2em] text-[#0E1E2B]">
-              SCHEDULE &amp; STATUS
-            </h2>
-          </div>
+      {/* 2. SECTION: COVER IMAGE */}
+      <section className="space-y-4 pt-2">
+        <div className="border-b border-[#0E1E2B]/12 pb-2">
+          <h2 className="text-xs sm:text-sm font-mono font-bold uppercase tracking-[0.2em] text-[#0E1E2B]">
+            Cover Image
+          </h2>
+        </div>
 
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Report Date */}
-              <div>
-                <label className="block text-[11px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/80 mb-1.5">
-                  Report Date
-                </label>
-                <input
-                  type="date"
-                  value={reportDate}
-                  onChange={e => setReportDate(e.target.value)}
-                  className="w-full text-sm sm:text-base font-normal px-3.5 py-2.5 sm:py-3 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[44px] sm:min-h-[48px]"
-                />
-              </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleImageFileChange}
+        />
 
-              {/* Status Dropdown */}
-              <div>
-                <label className="block text-[11px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/80 mb-1.5">
-                  Report Status
-                </label>
-                <select
-                  value={status}
-                  onChange={e => setStatus(e.target.value as ReportStatus)}
-                  className="w-full text-sm sm:text-base font-medium px-3.5 py-2.5 sm:py-3 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[44px] sm:min-h-[48px]"
-                >
-                  {ALL_REPORT_STATUSES.map(st => (
-                    <option key={st} value={st}>
-                      {st}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
+        <input
+          ref={cameraInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          className="hidden"
+          onChange={handleCameraFileChange}
+        />
 
-            {/* Inspection Date with History */}
-            <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="block text-[11px] font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/80">
-                  Inspection Date
-                </label>
-                <button
-                  type="button"
-                  onClick={() => setIsHistoryOpen(true)}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0E1E2B] hover:text-[#628EF7] bg-white hover:bg-[#F4F6F8] px-2.5 py-1 rounded-md border border-[#0E1E2B]/15 transition-colors touch-manipulation min-h-[32px] cursor-pointer"
-                >
-                  <History className="w-3.5 h-3.5" />
-                  <span>History ({report.inspectionDateHistory?.length || 0})</span>
-                </button>
-              </div>
-              <input
-                type="date"
-                value={inspectionDate}
-                onChange={e => setInspectionDate(e.target.value)}
-                className="w-full text-sm sm:text-base font-mono font-medium px-3.5 py-2.5 sm:py-3 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[44px] sm:min-h-[48px]"
+        {reportImage ? (
+          <div className="rounded-xl overflow-hidden border border-[#0E1E2B]/20 bg-[#0E1E2B] shadow-2xs">
+            {/* Larger preview: easy to inspect on mobile and desktop */}
+            <div className="h-64 sm:h-80 md:h-96 w-full flex items-center justify-center bg-[#0E1E2B] p-2">
+              <img
+                src={reportImage}
+                alt="Report cover preview"
+                className="max-h-full max-w-full object-contain rounded-md"
               />
             </div>
+
+            <div className="p-3 sm:p-4 bg-[#0E1E2B] text-white flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 border-t border-white/10">
+              <div className="flex items-center gap-2 text-xs font-bold text-white/90">
+                <ImageIcon className="w-4 h-4 text-[#B2E5F6] shrink-0" />
+                <span>Cover Photo Active</span>
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  id="btn_cover_change"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isProcessingImage}
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white/15 hover:bg-white/25 active:bg-white/30 text-white text-xs font-bold uppercase tracking-wider transition-all cursor-pointer touch-manipulation min-h-[44px]"
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>Change</span>
+                </button>
+
+                <button
+                  type="button"
+                  id="btn_cover_camera"
+                  onClick={() => cameraInputRef.current?.click()}
+                  disabled={isProcessingImage}
+                  className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-white/15 hover:bg-white/25 active:bg-white/30 text-white text-xs font-bold uppercase tracking-wider transition-all cursor-pointer touch-manipulation min-h-[44px]"
+                >
+                  <Camera className="w-4 h-4" />
+                  <span>Camera</span>
+                </button>
+
+                {/* Clearly destructive and visually separated */}
+                <button
+                  type="button"
+                  id="btn_cover_remove"
+                  onClick={() => setReportImage('')}
+                  className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-lg bg-rose-600/90 hover:bg-rose-600 active:bg-rose-700 text-white text-xs font-bold uppercase tracking-wider transition-all cursor-pointer touch-manipulation min-h-[44px] ml-auto sm:ml-2 border border-rose-500"
+                  title="Remove report cover image"
+                  aria-label="Remove report cover image"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span className="sm:inline hidden">Remove</span>
+                </button>
+              </div>
+            </div>
           </div>
-        </section>
-      )}
+        ) : (
+          <div className="border-2 border-dashed border-[#0E1E2B]/20 hover:border-[#0E1E2B]/40 rounded-xl p-6 sm:p-8 bg-white text-center transition-colors">
+            <div className="w-12 h-12 rounded-full bg-[#F4F6F8] border border-[#0E1E2B]/10 flex items-center justify-center mx-auto mb-2.5 text-[#0E1E2B]/70">
+              <ImagePlus className="w-6 h-6 stroke-[1.8] text-[#628EF7]" />
+            </div>
+            <p className="text-sm font-semibold text-[#0E1E2B] mb-1">
+              No Cover Image Attached
+            </p>
+            <p className="text-xs text-[#0E1E2B]/70 mb-4 max-w-sm mx-auto">
+              Upload an existing cover photograph from your device or capture one directly on site.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-3 max-w-sm mx-auto">
+              <button
+                type="button"
+                id="btn_upload_cover_image"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isProcessingImage}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-[#0E1E2B]/25 hover:border-[#0E1E2B] bg-white hover:bg-[#F4F6F8] text-[#0E1E2B] font-bold text-xs uppercase tracking-wider transition-all cursor-pointer touch-manipulation focus:outline-none focus:ring-2 focus:ring-[#628EF7]/30 min-h-[52px]"
+              >
+                <Upload className="w-4 h-4 stroke-[2.2] text-[#628EF7]" />
+                <span>Upload Image</span>
+              </button>
+
+              <button
+                type="button"
+                id="btn_camera_cover_image"
+                onClick={() => cameraInputRef.current?.click()}
+                disabled={isProcessingImage}
+                className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-3 rounded-lg border border-[#0E1E2B]/25 hover:border-[#0E1E2B] bg-white hover:bg-[#F4F6F8] text-[#0E1E2B] font-bold text-xs uppercase tracking-wider transition-all cursor-pointer touch-manipulation focus:outline-none focus:ring-2 focus:ring-[#628EF7]/30 min-h-[52px]"
+              >
+                <Camera className="w-4 h-4 stroke-[2.2] text-[#628EF7]" />
+                <span>Take Photo</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {isProcessingImage && (
+          <p className="text-xs text-[#628EF7] font-semibold flex items-center gap-1.5 animate-pulse pt-1">
+            <span className="w-3.5 h-3.5 border-2 border-[#0E1E2B]/20 border-t-[#628EF7] rounded-full animate-spin shrink-0" />
+            <span>Optimizing cover image...</span>
+          </p>
+        )}
+      </section>
+
+      {/* 3. SECTION: SCHEDULE */}
+      <section className="space-y-4 pt-2">
+        <div className="border-b border-[#0E1E2B]/12 pb-2">
+          <h2 className="text-xs sm:text-sm font-mono font-bold uppercase tracking-[0.2em] text-[#0E1E2B]">
+            Schedule
+          </h2>
+        </div>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Report Date */}
+            <div>
+              <label
+                htmlFor="input_report_date"
+                className="block text-xs font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/90 mb-1.5"
+              >
+                Report Date
+              </label>
+              <input
+                type="date"
+                id="input_report_date"
+                value={reportDate}
+                onChange={(e) => setReportDate(e.target.value)}
+                className="w-full text-sm sm:text-base font-medium px-3.5 sm:px-4 py-3 sm:py-3.5 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[52px]"
+              />
+            </div>
+
+            {/* Status Dropdown */}
+            <div>
+              <label
+                htmlFor="input_report_status"
+                className="block text-xs font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/90 mb-1.5"
+              >
+                Report Status
+              </label>
+              <AssuredSelect
+                id="input_report_status"
+                value={status}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setStatus(e.target.value as ReportStatus)}
+              >
+                {ALL_REPORT_STATUSES.map((st) => (
+                  <option key={st} value={st}>
+                    {st}
+                  </option>
+                ))}
+              </AssuredSelect>
+            </div>
+          </div>
+
+          {/* Inspection Date with History */}
+          <div>
+            <div className="flex items-center justify-between mb-1.5">
+              <label
+                htmlFor="input_inspection_date"
+                className="block text-xs font-mono font-bold uppercase tracking-wider text-[#0E1E2B]/90"
+              >
+                Inspection Date
+              </label>
+              <button
+                type="button"
+                onClick={() => setIsHistoryOpen(true)}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#0E1E2B] hover:text-[#628EF7] bg-white hover:bg-[#F4F6F8] px-3 py-1.5 rounded-md border border-[#0E1E2B]/15 transition-colors touch-manipulation min-h-[36px] cursor-pointer"
+              >
+                <History className="w-3.5 h-3.5" />
+                <span>History ({report.inspectionDateHistory?.length || 0})</span>
+              </button>
+            </div>
+            <input
+              type="date"
+              id="input_inspection_date"
+              value={inspectionDate}
+              onChange={(e) => setInspectionDate(e.target.value)}
+              className="w-full text-sm sm:text-base font-mono font-medium px-3.5 sm:px-4 py-3 sm:py-3.5 bg-white border border-[#0E1E2B]/20 rounded-lg text-[#0E1E2B] focus:border-[#628EF7] focus:ring-2 focus:ring-[#628EF7]/20 outline-none transition-all min-h-[52px]"
+            />
+          </div>
+        </div>
+      </section>
 
       {/* 4. SECTION HIERARCHY: ISSUES (Contextual navigation to dedicated Issues page with Assured Cyan treatment) */}
       {!isNew && (
@@ -899,35 +938,48 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
             </h2>
           </div>
 
-          <div className="bg-white rounded-xl border border-[#0E1E2B]/15 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="bg-white rounded-xl border border-[#0E1E2B]/15 p-4 sm:p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
             <div className="space-y-1">
               <h3 className="text-sm sm:text-base font-bold text-[#0E1E2B] tracking-tight">
                 Photo Report
               </h3>
               <p className="text-xs text-[#0E1E2B]/65 font-normal">
-                Generate the official Assured Capture photo report.
+                Preview and export the official Assured Capture photo report.
               </p>
             </div>
 
-            {/* Primary Action: Export Photo Report */}
-            <button
-              type="button"
-              onClick={() => setIsExportDialogOpen(true)}
-              disabled={isExporting}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 rounded-lg bg-white hover:bg-[#F4F6F8] active:bg-[#E5E8EB] text-[#0E1E2B] border border-[#0E1E2B]/20 hover:border-[#0E1E2B] font-bold text-xs uppercase tracking-wider transition-colors touch-manipulation min-h-[44px] shrink-0 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#628EF7]"
-            >
-              {isExporting ? (
-                <>
-                  <span className="w-3.5 h-3.5 border-2 border-[#0E1E2B]/30 border-t-[#628EF7] rounded-full animate-spin" />
-                  <span>Generating {exportingFormat === 'pdf' ? 'PDF' : 'DOCX'}...</span>
-                </>
-              ) : (
-                <>
-                  <FileDown className="w-4 h-4 text-[#628EF7] stroke-[2.2]" />
-                  <span>Export Photo Report</span>
-                </>
-              )}
-            </button>
+            <div className="w-full lg:w-auto flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+              {/* Preview Action */}
+              <button
+                type="button"
+                onClick={() => setIsPreviewOpen(true)}
+                disabled={isExporting}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 rounded-lg bg-[#EDF8FA] hover:bg-[#E2F4F7] active:bg-[#D7EFF3] text-[#0E7490] border border-[#94D6E7] hover:border-[#58B9D4] font-bold text-xs uppercase tracking-wider transition-colors touch-manipulation min-h-[44px] cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#0E7490]/20 shadow-2xs"
+              >
+                <Eye className="w-4 h-4 stroke-[2.2]" />
+                <span>Preview Photo Report</span>
+              </button>
+
+              {/* Primary Action: Export Photo Report */}
+              <button
+                type="button"
+                onClick={() => setIsExportDialogOpen(true)}
+                disabled={isExporting}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-3 rounded-lg bg-white hover:bg-[#F4F6F8] active:bg-[#E5E8EB] text-[#0E1E2B] border border-[#0E1E2B]/20 hover:border-[#0E1E2B] font-bold text-xs uppercase tracking-wider transition-colors touch-manipulation min-h-[44px] shrink-0 cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#628EF7]"
+              >
+                {isExporting ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-[#0E1E2B]/30 border-t-[#628EF7] rounded-full animate-spin" />
+                    <span>Generating {exportingFormat === 'pdf' ? 'PDF' : 'DOCX'}...</span>
+                  </>
+                ) : (
+                  <>
+                    <FileDown className="w-4 h-4 text-[#628EF7] stroke-[2.2]" />
+                    <span>Export Photo Report</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           {exportFeedback && (
@@ -980,6 +1032,18 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
         onCancel={() => setIsDeleteDialogOpen(false)}
       />
 
+      {/* Photo Report Multi-Page Visual Preview Modal */}
+      <PhotoReportPreviewModal
+        isOpen={isPreviewOpen}
+        onClose={() => setIsPreviewOpen(false)}
+        report={report}
+        issues={issues}
+        onOpenExportDialog={() => {
+          setIsPreviewOpen(false);
+          setIsExportDialogOpen(true);
+        }}
+      />
+
       {/* Format Selection Dialog for Photo Report Export */}
       <ExportFormatDialog
         isOpen={isExportDialogOpen}
@@ -996,6 +1060,50 @@ export const ReportDetailScreen: React.FC<ReportDetailScreenProps> = ({
         currentInspectionDate={inspectionDate}
         history={report.inspectionDateHistory || []}
       />
+
+      {/* STICKY BOTTOM SAVE ACTION */}
+      <div
+        className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 backdrop-blur-md border-t border-[#0E1E2B]/15 p-3 sm:p-4 shadow-lg"
+        style={{ paddingBottom: 'max(12px, env(safe-area-inset-bottom))' }}
+      >
+        <div className="w-full max-w-3xl lg:max-w-4xl mx-auto flex flex-col gap-2">
+          {saveError && (
+            <div className="p-2.5 sm:p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-900 text-xs font-semibold flex items-center gap-2">
+              <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>{saveError}</span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            id="btn_save_report_information"
+            onClick={handleSave}
+            disabled={isSaving}
+            className={`w-full py-3.5 px-5 rounded-lg font-bold text-xs sm:text-sm uppercase tracking-wider min-h-[52px] flex items-center justify-center gap-2 transition-all touch-manipulation cursor-pointer active:scale-[0.99] focus:outline-none focus:ring-4 focus:ring-[#628EF7]/25 shadow-sm ${
+              saveSuccess
+                ? 'bg-emerald-600 text-white'
+                : 'bg-[#628EF7] hover:bg-[#4E7AF2] active:bg-[#3E69E0] text-white'
+            } ${isSaving ? 'opacity-70 cursor-not-allowed' : ''}`}
+          >
+            {isSaving ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span>Saving Report Information...</span>
+              </>
+            ) : saveSuccess ? (
+              <>
+                <Check className="w-4 h-4 stroke-[2.5]" />
+                <span>Report Information Saved</span>
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4 stroke-[2.2]" />
+                <span>Save Report Information</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
     </div>
   );
 };
